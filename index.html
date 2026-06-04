@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coin Quest - Carl's Eviction Escape</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <div id="game-app">
+    <!-- Main Game Canvas -->
+    <div id="game-container">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Glassmorphic HUD overlay -->
+      <div id="game-hud" class="hud-hidden">
+        <div class="hud-left">
+          <div class="player-profile">
+            <div class="profile-avatar">
+              <!-- Dynamically drawn avatar or styled letter -->
+              <span>Carl</span>
+            </div>
+            <div class="profile-stats">
+              <div class="stat-row">
+                <span class="stat-label">HEALTH</span>
+                <div class="bar-container health-container">
+                  <div id="health-bar" class="bar-fill health-fill" style="width: 100%;"></div>
+                </div>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">MONEY METER</span>
+                <div class="bar-container money-container">
+                  <div id="money-bar" class="bar-fill money-fill" style="width: 0%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud-center">
+          <div id="tutorial-prompt">Press A / D to Walk</div>
+        </div>
+
+        <div class="hud-right">
+          <div class="coin-display">
+            <div class="coin-icon">🪙</div>
+            <div class="coin-details">
+              <span class="coin-count" id="hud-coins">0</span>
+              <span class="debt-target">/ $1,432,980</span>
+            </div>
+          </div>
+          
+          <div class="skill-slots">
+            <div class="skill-slot" id="slot-1">
+              <span class="slot-key">E</span>
+              <div class="slot-content">
+                <span class="skill-name" id="hud-skill-1">Locked</span>
+                <div class="cooldown-overlay" id="cooldown-1" style="height: 0%;"></div>
+              </div>
+            </div>
+            <div class="skill-slot" id="slot-2">
+              <span class="slot-key">F</span>
+              <div class="slot-content">
+                <span class="skill-name" id="hud-skill-2">Locked</span>
+                <div class="cooldown-overlay" id="cooldown-2" style="height: 0%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Start Screen / Eviction Cutscene -->
+      <div id="start-screen" class="overlay-screen active">
+        <div class="screen-content glassmorphism">
+          <h1 class="game-title">COIN QUEST</h1>
+          <h2 class="game-subtitle">The Eviction of Carl Quest</h2>
+          
+          <div class="story-crawl-container">
+            <div class="story-text" id="story-crawl">
+              Carl Quest is a mid-30s guy living a quiet life at his Grandma's house. 
+              <br><br>
+              One morning, he steps outside to find a massive eviction notice. The government has seized the house over an unreturned library book from 12 years ago. Thanks to corrupt politicians, hyper-inflation, and compound interest, Carl now owes:
+              <br><br>
+              <span class="highlight-debt">$1,432,980.24</span>
+              <br><br>
+              Refusing to let Grandma be homeless, Carl must venture beyond the neighborhood limits, fighting rogue HOA inspectors, wild jungle monkeys, and IRS agents to punch, kick, and collect enough coins to buy back the house!
+            </div>
+          </div>
+
+          <button id="start-btn" class="menu-btn pulse-glow">Begin Carl's Quest</button>
+        </div>
+      </div>
+
+      <!-- Campfire / Skill Swapping Overlay Screen -->
+      <div id="campfire-screen" class="overlay-screen hidden">
+        <div class="screen-content glassmorphism">
+          <h2 class="campfire-title">🔥 Campfire Checkpoint</h2>
+          <p class="campfire-desc">Progress saved. Rest here to equip/change Carl's financial skills.</p>
+
+          <div class="campfire-layout">
+            <div class="active-loadout">
+              <h3>Active Skills</h3>
+              <div class="loadout-slot" data-slot="1">
+                <span class="loadout-key">E</span>
+                <div class="loadout-info">
+                  <div class="loadout-name" id="campfire-slot-1">None</div>
+                  <div class="loadout-desc">Press E in game to activate</div>
+                </div>
+              </div>
+              <div class="loadout-slot" data-slot="2">
+                <span class="loadout-key">F</span>
+                <div class="loadout-info">
+                  <div class="loadout-name" id="campfire-slot-2">None</div>
+                  <div class="loadout-desc">Press F in game to activate</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="available-skills">
+              <h3>Unlocked Skills</h3>
+              <div class="skills-list" id="unlocked-skills-container">
+                <!-- Dynamically populated via JS -->
+              </div>
+            </div>
+          </div>
+
+          <button id="resume-btn" class="menu-btn">Resume Journey</button>
+        </div>
+      </div>
+
+      <!-- Game Over Overlay Screen -->
+      <div id="game-over-screen" class="overlay-screen hidden">
+        <div class="screen-content glassmorphism">
+          <h1 class="game-over-title">CARL EVICTED!</h1>
+          <p class="game-over-desc">The government has claimed Grandma's house. You ended up in deep debt.</p>
+          <button id="retry-btn" class="menu-btn pulse-glow">Try Again</button>
+        </div>
+      </div>
+
+      <!-- Victory Screen -->
+      <div id="victory-screen" class="overlay-screen hidden">
+        <div class="screen-content glassmorphism">
+          <h1 class="victory-title">SUBURBS ESCAPED!</h1>
+          <p class="victory-desc">You defeated Officer Bob and took his Segway's fuel chip, unlocking the <strong>Coin Slide</strong> skill!</p>
+          <div class="victory-unlocked-skill">
+            <div class="skill-badge">🪙💨</div>
+            <div>
+              <h3>New Skill Unlocked: Coin Slide</h3>
+              <p>Press E or F to slide along the ground at high speeds, knocking back enemies and becoming invulnerable!</p>
+            </div>
+          </div>
+          <button id="next-btn" class="menu-btn pulse-glow">Enter the Jungle (Area 2)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
