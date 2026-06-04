@@ -31,7 +31,7 @@ export class GameEngine {
   private ctx: CanvasRenderingContext2D;
   
   // Game state
-  private gameState: 'start_screen' | 'playing' | 'campfire' | 'game_over' | 'victory' = 'start_screen';
+  private gameState: 'start_screen' | 'playing' | 'campfire' | 'game_over' | 'victory' | 'tutorial' = 'start_screen';
   private tick: number = 0;
   private cameraX: number = 0;
   private maxCameraX: number = 2240; // 3200 level width - 960 canvas width
@@ -39,6 +39,8 @@ export class GameEngine {
   // Entities
   private player: Player;
   private enemies: Enemy[] = [];
+  private enemiesHitThisSwing: Enemy[] = [];
+  private enemiesHitThisSlide: Enemy[] = [];
   private drops: Drop[] = [];
   private projectiles: Projectile[] = [];
   private particles: Particle[] = [];
@@ -76,6 +78,18 @@ export class GameEngine {
   // Selected campfire slot
   private selectedCampfireSlot: 1 | 2 = 1;
 
+  // Tutorial screen elements
+  private tutorialOverlay: HTMLElement | null = null;
+  private tutorialTitle: HTMLElement | null = null;
+  private tutorialText: HTMLElement | null = null;
+  private triggeredTutorials: { [key: string]: boolean } = {
+    movement: false,
+    crouch: false,
+    attack: false,
+    lawnmower: false,
+    campfire: false
+  };
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const context = canvas.getContext('2d');
@@ -99,6 +113,14 @@ export class GameEngine {
     this.campfireScreen = document.getElementById('campfire-screen');
     this.gameOverScreen = document.getElementById('game-over-screen');
     this.victoryScreen = document.getElementById('victory-screen');
+    this.tutorialOverlay = document.getElementById('tutorial-overlay');
+    this.tutorialTitle = document.getElementById('tutorial-title');
+    this.tutorialText = document.getElementById('tutorial-text');
+
+    const closeBtn = document.getElementById('tutorial-close-btn');
+    closeBtn?.addEventListener('click', () => {
+      this.resumeFromTutorial();
+    });
 
     this.setupInputs();
     this.setupCampfireScreenListeners();
@@ -171,18 +193,37 @@ export class GameEngine {
     // Reset level obstacles
     this.level.initLevel();
 
-    // Spawn Suburbs Enemies
+    // Spawn Suburbs Enemies in Grouped Waves
     this.enemies = [
-      new Enemy(550, 450, 'dog', 0),        // First Dog near picket fence
-      new Enemy(950, 200, 'pigeon', 150),   // First Pigeon diving
-      new Enemy(1250, 450, 'lawnmower', 0),  // Mower running toward cardboard box
-      new Enemy(1450, 220, 'pigeon', 200),  // Second Pigeon
-      
-      // Post Campfire enemies
-      new Enemy(1900, 450, 'dog', 200),     // Dog patrolling after campfire
-      new Enemy(2050, 240, 'pigeon', 100),  // Pigeon diving over raised platform
-      new Enemy(2200, 320, 'lawnmower', 0)  // Lawnmower patrolling on top of raised platform
+      // Group 1: Stray Dog pack (X=540 to 600)
+      new Enemy(540, 450, 'dog', 0),
+      new Enemy(600, 450, 'dog', 0),
+
+      // Group 2: Angry Pigeon swarm (X=900 to 960)
+      new Enemy(900, 200, 'pigeon', 100),
+      new Enemy(960, 240, 'pigeon', 100),
+
+      // Group 3: HOA Lawnmower squad (X=1220 to 1340)
+      new Enemy(1220, 450, 'lawnmower', 0),
+      new Enemy(1340, 450, 'lawnmower', 0),
+
+      // Group 4: Post-campfire ambush (X=1900 to 2010)
+      new Enemy(1900, 450, 'dog', 150),
+      new Enemy(1960, 210, 'pigeon', 80),
+      new Enemy(2020, 240, 'pigeon', 80),
+      new Enemy(2200, 320, 'lawnmower', 0)
     ];
+
+    // Reset tutorial triggers if starting a fresh run from porch
+    if (this.lastCheckpointX === 100) {
+      this.triggeredTutorials = {
+        movement: false,
+        crouch: false,
+        attack: false,
+        lawnmower: false,
+        campfire: false
+      };
+    }
 
     // If player has already beaten boss once or campfire used
     if (this.hasCampfireBeenUsed) {
@@ -207,6 +248,22 @@ export class GameEngine {
     this.player.unlockSkill('Coin Slide');
 
     this.populateCampfireSkills();
+  }
+
+  private triggerTutorial(id: string, title: string, text: string) {
+    this.gameState = 'tutorial';
+    this.triggeredTutorials[id] = true;
+    
+    if (this.tutorialTitle) this.tutorialTitle.innerText = title;
+    if (this.tutorialText) this.tutorialText.innerHTML = text;
+    
+    this.tutorialOverlay?.classList.remove('hidden');
+  }
+
+  private resumeFromTutorial() {
+    this.gameState = 'playing';
+    this.tutorialOverlay?.classList.add('hidden');
+    window.focus();
   }
 
   private populateCampfireSkills() {
@@ -313,7 +370,10 @@ export class GameEngine {
   }
 
   private handleCombatCollisions() {
-    if (this.player.attackActiveTimer <= 0) return;
+    if (this.player.attackActiveTimer <= 0) {
+      this.enemiesHitThisSwing = [];
+      return;
+    }
 
     const currentHeight = this.player.isCrouching ? this.player.height / 2 : this.player.height;
     
@@ -349,6 +409,7 @@ export class GameEngine {
     // Check collision against enemies
     for (const enemy of this.enemies) {
       if (enemy.state === 'dead') continue;
+      if (this.enemiesHitThisSwing.includes(enemy)) continue; // Already hit this swing
 
       if (
         ax + aw > enemy.x &&
@@ -356,6 +417,8 @@ export class GameEngine {
         ay + ah > enemy.y &&
         ay < enemy.y + enemy.height
       ) {
+        this.enemiesHitThisSwing.push(enemy); // Register hit
+        
         // Damage calculations
         const damage = this.player.comboStep === 3 ? 20 : 10; // Kick does double damage
         const knockback = this.player.facingRight ? 6 : -6;
@@ -386,7 +449,10 @@ export class GameEngine {
   }
 
   private handlePlayerSlideCollisions() {
-    if (!this.player.isCoinSliding) return;
+    if (!this.player.isCoinSliding) {
+      this.enemiesHitThisSlide = [];
+      return;
+    }
 
     // Bounding box of slide
     const sax = this.player.x;
@@ -396,6 +462,7 @@ export class GameEngine {
 
     for (const enemy of this.enemies) {
       if (enemy.state === 'dead') continue;
+      if (this.enemiesHitThisSlide.includes(enemy)) continue; // Already hit this slide
 
       if (
         sax + saw > enemy.x &&
@@ -403,6 +470,8 @@ export class GameEngine {
         say + sah > enemy.y &&
         say < enemy.y + enemy.height
       ) {
+        this.enemiesHitThisSlide.push(enemy); // Register slide hit
+        
         // Slide hits enemy: deal medium damage and heavy knockback
         const knockback = this.player.facingRight ? 10 : -10;
         const newDrops = enemy.takeDamage(15, knockback, this.player.x);
@@ -465,6 +534,84 @@ export class GameEngine {
           this.player.takeDamage(p.damage);
           this.projectiles.splice(i, 1);
           continue;
+        }
+      }
+
+      // Check collision/physics for player cointoss projectile
+      if (p.type === 'cointoss') {
+        // Bounce on platforms
+        for (const plat of this.level.platforms) {
+          if (plat.broken) continue;
+          if (
+            p.x + p.radius > plat.x &&
+            p.x - p.radius < plat.x + plat.w &&
+            p.y + p.radius > plat.y &&
+            p.y - p.radius < plat.y + plat.h
+          ) {
+            // Collision from top
+            if (p.vy > 0 && p.y - p.vy + p.radius <= plat.y + 4) {
+              p.y = plat.y - p.radius;
+              p.vy = -p.vy * 0.6; // Bounce up
+              p.vx *= 0.9;
+              p.bounces++;
+            }
+            // Lateral collision
+            else if (p.vx > 0 && p.x - p.vx + p.radius <= plat.x) {
+              p.x = plat.x - p.radius;
+              p.vx = -p.vx * 0.8;
+              p.bounces++;
+            }
+            else if (p.vx < 0 && p.x - p.vx - p.radius >= plat.x + plat.w) {
+              p.x = plat.x + plat.w + p.radius;
+              p.vx = -p.vx * 0.8;
+              p.bounces++;
+            }
+          }
+        }
+
+        // Hard floor boundary
+        const groundY = 480;
+        if (p.y + p.radius >= groundY) {
+          p.y = groundY - p.radius;
+          p.vy = -p.vy * 0.6;
+          p.vx *= 0.9;
+          p.bounces++;
+        }
+
+        // Check collision against enemies
+        for (const enemy of this.enemies) {
+          if (enemy.state === 'dead') continue;
+          const dx = enemy.x + enemy.width / 2 - p.x;
+          const dy = enemy.y + enemy.height / 2 - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          
+          if (dist < p.radius + Math.max(enemy.width, enemy.height) / 2) {
+            // Explode!
+            const newDrops = enemy.takeDamage(p.damage, p.vx > 0 ? 6 : -6, this.player.x);
+            this.spawnExplosion(p.x, p.y);
+            if (newDrops) {
+              this.drops.push(...newDrops);
+              if (enemy.type === 'officer_bob') {
+                this.bossDefeated = true;
+                this.isCameraLockedForBoss = false;
+                const gate = this.level.platforms.find(plat => plat.type === 'gate');
+                if (gate) gate.broken = true;
+                setTimeout(() => {
+                  this.gameState = 'victory';
+                  this.victoryScreen?.classList.remove('hidden');
+                }, 1500);
+              }
+            }
+            this.projectiles.splice(i, 1);
+            break;
+          }
+        }
+
+        // Clean up if it bounced too much or if it's already removed
+        const index = this.projectiles.indexOf(p);
+        if (index !== -1 && p.bounces > 3) {
+          this.spawnExplosion(p.x, p.y);
+          this.projectiles.splice(index, 1);
         }
       }
 
@@ -584,6 +731,54 @@ export class GameEngine {
     }
   }
 
+  private spawnPlayerCoinToss() {
+    const px = this.player.x + (this.player.facingRight ? this.player.width : 0);
+    const py = this.player.y + this.player.height / 2 - 10;
+    const vx = this.player.facingRight ? 8 : -8;
+    const vy = -3;
+    this.projectiles.push({
+      x: px,
+      y: py,
+      vx: vx,
+      vy: vy,
+      radius: 8,
+      type: 'cointoss',
+      bounces: 0,
+      damage: 20,
+      color: '#ffd700'
+    });
+  }
+
+  private spawnShieldAbsorbEffect(x: number, y: number) {
+    for (let i = 0; i < 15; i++) {
+      this.particles.push({
+        x: x,
+        y: y,
+        vx: (Math.random() - 0.5) * 8,
+        vy: (Math.random() - 0.5) * 8,
+        color: '#ffd700',
+        size: Math.random() * 3 + 2,
+        life: 0,
+        maxLife: 20 + Math.random() * 10
+      });
+    }
+  }
+
+  private spawnExplosion(x: number, y: number) {
+    for (let i = 0; i < 12; i++) {
+      this.particles.push({
+        x: x,
+        y: y,
+        vx: (Math.random() - 0.5) * 6,
+        vy: (Math.random() - 0.5) * 6 - 2,
+        color: i % 2 === 0 ? '#f59e0b' : '#ef4444',
+        size: Math.random() * 4 + 3,
+        life: 0,
+        maxLife: 20 + Math.random() * 10
+      });
+    }
+  }
+
   private updateParticles() {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -669,14 +864,57 @@ export class GameEngine {
 
   // Orchestrator loop
   private animate = () => {
-    this.tick++;
-
     if (this.gameState === 'playing') {
+      this.tick++;
+
       // 1. Update Player Inputs & States
       this.player.handleInput(this.keys, this.mouseClicked);
       this.mouseClicked = false; // Reset click triggers
 
       this.player.update(this.level.platforms);
+
+      // Check tutorial checkpoints
+      if (this.player.x >= 300 && !this.triggeredTutorials.movement) {
+        this.triggerTutorial(
+          'movement',
+          'Walk & Jump Tutorial',
+          'Carl, it\'s time to escape Grandma\'s suburbs! Use <strong>A / D</strong> or Left/Right arrow keys to Walk, and hold <strong>W</strong> or Up Arrow key to Jump over picket fences and trash cans.'
+        );
+      } else if (this.player.x >= 650 && !this.triggeredTutorials.crouch) {
+        this.triggerTutorial(
+          'crouch',
+          'Crouch Tutorial',
+          'Heads up! Angry pigeons dive-bomb from above. Press <strong>S</strong> or Arrow Down to Crouch under them safely.'
+        );
+      } else if (this.player.x >= 1000 && !this.triggeredTutorials.attack) {
+        this.triggerTutorial(
+          'attack',
+          'Attack Combo Tutorial',
+          'A pile of cardboard boxes blocks the sidewalk! Click <strong>Left Mouse</strong> or press <strong>J</strong> to punch. Press it consecutively to perform a <strong>Punch-Punch-Kick combo</strong> to break them.'
+        );
+      } else if (this.player.x >= 1200 && !this.triggeredTutorials.lawnmower) {
+        this.triggerTutorial(
+          'lawnmower',
+          'Runaway Lawnmower Tutorial',
+          'HOA lawnmowers are patrolling the street. They are immune to front attacks! Jump over them, wait for them to crash into cardboard boxes or picket fences, then attack while they are <strong>Crash Stunned</strong>.'
+        );
+      } else if (this.player.x >= 1550 && !this.triggeredTutorials.campfire) {
+        this.triggerTutorial(
+          'campfire',
+          'Rest Campfire Tutorial',
+          'Checkpoint reached! Stand next to the campfire and press <strong>R</strong> to rest, save your progress, fully heal, and equip active skills like the <strong>Coin Slide</strong>!'
+        );
+      }
+
+      // Check skill flags
+      if (this.player.coinTossTriggered) {
+        this.player.coinTossTriggered = false;
+        this.spawnPlayerCoinToss();
+      }
+      if (this.player.shieldAbsorbedHit) {
+        this.player.shieldAbsorbedHit = false;
+        this.spawnShieldAbsorbEffect(this.player.x + this.player.width / 2, this.player.y + this.player.height / 2);
+      }
 
       // Check game over triggers
       if (this.player.health <= 0) {

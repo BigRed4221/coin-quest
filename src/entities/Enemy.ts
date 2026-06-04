@@ -1,4 +1,5 @@
 import { Drop } from './Drop';
+import { Platform } from '../engine/Level';
 
 export type EnemyType = 'pigeon' | 'dog' | 'lawnmower' | 'officer_bob';
 
@@ -46,21 +47,21 @@ export class Enemy {
     if (type === 'pigeon') {
       this.width = 24;
       this.height = 20;
-      this.health = 10; // Low health (dies in 1 punch)
-      this.maxHealth = 10;
+      this.health = 20; // 2 hits
+      this.maxHealth = 20;
       this.speed = 2;
       this.vy = 0;
     } else if (type === 'dog') {
       this.width = 40;
       this.height = 30;
-      this.health = 30; // Medium health (requires a full PPK combo)
+      this.health = 30; // 3 hits
       this.maxHealth = 30;
       this.speed = 1.5;
     } else if (type === 'lawnmower') {
       this.width = 45;
       this.height = 30;
-      this.health = 1; // 1 hit once vulnerable
-      this.maxHealth = 1;
+      this.health = 60; // 6 hits once vulnerable
+      this.maxHealth = 60;
       this.speed = 2.5;
       this.vx = this.speed;
     } else {
@@ -117,7 +118,7 @@ export class Enemy {
     return drops;
   }
 
-  update(playerX: number, playerY: number, platforms: { x: number; y: number; w: number; h: number; type: string }[], tick: number) {
+  update(playerX: number, playerY: number, platforms: Platform[], tick: number) {
     if (this.state === 'dead') return;
 
     // Flash timer tick
@@ -224,7 +225,7 @@ export class Enemy {
 
         // Check if hit any obstacle in level
         for (const p of platforms) {
-          if (p.type === 'obstacle' || p.type === 'box') {
+          if (p.type === 'obstacle' || (p.type === 'box' && !p.broken)) {
             const hitLeft = this.x + this.width >= p.x && this.x + this.width <= p.x + 10;
             const hitRight = this.x <= p.x + p.w && this.x >= p.x + p.w - 10;
             const checkY = this.y + this.height > p.y && this.y < p.y + p.h;
@@ -324,39 +325,54 @@ export class Enemy {
     ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
     if (!this.facingRight) ctx.scale(-1, 1);
 
-    // Body (slate gray)
-    ctx.fillStyle = '#64748b';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 12, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
+    const outlineOffsets = [[-2, 0], [2, 0], [0, -2], [0, 2]];
+    for (const [ox, oy] of outlineOffsets) {
+      ctx.save();
+      ctx.translate(ox, oy);
+      this.drawPigeonShape(ctx, tick, true);
+      ctx.restore();
+    }
 
-    // Head (dark blue-gray)
-    ctx.fillStyle = '#475569';
-    ctx.beginPath();
-    ctx.arc(8, -6, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Beak (yellow)
-    ctx.fillStyle = '#fbbf24';
-    ctx.beginPath();
-    ctx.moveTo(13, -8);
-    ctx.lineTo(19, -6);
-    ctx.lineTo(13, -4);
-    ctx.closePath();
-    ctx.fill();
-
-    // Wing (animating up and down)
-    const wingAngle = Math.sin(tick * 0.4) * 0.7;
-    ctx.fillStyle = '#334155';
-    ctx.save();
-    ctx.translate(-3, -2);
-    ctx.rotate(wingAngle);
-    ctx.beginPath();
-    ctx.ellipse(0, -4, 8, 4, -Math.PI / 4, 0, Math.PI * 2);
-    ctx.fill();
+    this.drawPigeonShape(ctx, tick, false);
     ctx.restore();
+  }
 
-    ctx.restore();
+  private drawPigeonShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
+    const originalFillStyle = ctx.fillStyle;
+    const setColor = (color: string) => {
+      ctx.fillStyle = isOutline ? '#0f172a' : color;
+    };
+
+    // Body (slate gray block)
+    setColor('#64748b');
+    ctx.fillRect(-12, -8, 22, 15);
+
+    // Dark shading
+    setColor('#475569');
+    ctx.fillRect(-12, 3, 22, 4);
+
+    // Head (dark blue-gray block)
+    setColor('#475569');
+    ctx.fillRect(6, -14, 10, 10);
+
+    // Beak (yellow rect)
+    setColor('#fbbf24');
+    ctx.fillRect(16, -11, 4, 3);
+
+    // Eye (pixel-art white/black dot)
+    if (!isOutline) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(11, -12, 2, 2);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(12, -12, 1, 1);
+    }
+
+    // Wing (animating up and down using a block)
+    const wingOffset = Math.sin(tick * 0.45) > 0 ? -2 : 2;
+    setColor('#334155');
+    ctx.fillRect(-6, -6 + wingOffset, 10, 8);
+
+    ctx.fillStyle = originalFillStyle;
   }
 
   private drawDog(ctx: CanvasRenderingContext2D, tick: number) {
@@ -364,50 +380,66 @@ export class Enemy {
     ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
     if (!this.facingRight) ctx.scale(-1, 1);
 
-    const isRunning = this.state === 'chase';
-    const bob = isRunning ? Math.sin(tick * 0.4) * 2 : Math.sin(tick * 0.1) * 0.5;
+    const outlineOffsets = [[-2, 0], [2, 0], [0, -2], [0, 2]];
+    for (const [ox, oy] of outlineOffsets) {
+      ctx.save();
+      ctx.translate(ox, oy);
+      this.drawDogShape(ctx, tick, true);
+      ctx.restore();
+    }
 
-    // Tail (wagging if chasing)
-    const tailWag = isRunning ? Math.sin(tick * 0.6) * 0.5 : -0.2;
-    ctx.strokeStyle = '#854d0e';
-    ctx.lineWidth = 3;
-    ctx.save();
-    ctx.translate(-15, -5 + bob);
-    ctx.rotate(tailWag);
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(-8, -10, -12, -8);
-    ctx.stroke();
+    this.drawDogShape(ctx, tick, false);
     ctx.restore();
+  }
 
-    // Body (brown dog)
-    ctx.fillStyle = '#a16207'; // Medium brown
-    ctx.fillRect(-16, -10 + bob, 30, 18);
+  private drawDogShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
+    const originalFillStyle = ctx.fillStyle;
+    const setColor = (color: string) => {
+      ctx.fillStyle = isOutline ? '#0f172a' : color;
+    };
 
-    // Legs
-    ctx.fillStyle = '#78350f'; // Dark brown legs
+    const isRunning = this.state === 'chase';
+    const bob = isRunning ? Math.floor(Math.sin(tick * 0.45) * 2) : 0;
+
+    // Tail (blocky wagging)
+    setColor('#854d0e');
+    const tailYOffset = isRunning && Math.floor(tick / 5) % 2 === 0 ? -6 : -2;
+    ctx.fillRect(-18, -8 + bob + tailYOffset, 4, 6);
+
+    // Body (brown dog block)
+    setColor('#a16207'); // Medium brown
+    ctx.fillRect(-14, -10 + bob, 26, 18);
+
+    // Legs (blocky swing)
+    setColor('#78350f'); // Dark brown legs
     if (isRunning) {
-      const legCycle = Math.sin(tick * 0.3) * 8;
-      ctx.fillRect(-12, 8 + bob, 4, 8 - legCycle);
-      ctx.fillRect(8, 8 + bob, 4, 8 + legCycle);
+      const step = Math.floor(tick / 6) % 2;
+      ctx.fillRect(-10, 8 + bob, 4, step === 0 ? 8 : 4);
+      ctx.fillRect(4, 8 + bob, 4, step === 1 ? 8 : 4);
     } else {
-      ctx.fillRect(-12, 8 + bob, 4, 8);
-      ctx.fillRect(8, 8 + bob, 4, 8);
+      ctx.fillRect(-10, 8 + bob, 4, 8);
+      ctx.fillRect(4, 8 + bob, 4, 8);
     }
 
     // Head
-    ctx.fillStyle = '#a16207';
-    ctx.fillRect(8, -18 + bob, 14, 14);
+    setColor('#a16207');
+    ctx.fillRect(8, -18 + bob, 12, 12);
+
+    // Glowing red eye for stray dog
+    if (!isOutline) {
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(15, -14 + bob, 2, 2);
+    }
 
     // Snout
-    ctx.fillStyle = '#78350f';
-    ctx.fillRect(20, -12 + bob, 6, 6);
+    setColor('#78350f');
+    ctx.fillRect(18, -12 + bob, 6, 6);
 
-    // Ear (floppy black/dark brown ear)
-    ctx.fillStyle = '#451a03';
-    ctx.fillRect(6, -18 + bob, 4, 10);
+    // Ear (floppy dark block)
+    setColor('#451a03');
+    ctx.fillRect(6, -18 + bob, 4, 8);
 
-    ctx.restore();
+    ctx.fillStyle = originalFillStyle;
   }
 
   private drawLawnmower(ctx: CanvasRenderingContext2D, tick: number) {
@@ -415,51 +447,62 @@ export class Enemy {
     ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
     if (!this.facingRight) ctx.scale(-1, 1);
 
-    const isStunned = this.state === 'crash_stun';
-    
-    // Shaking if stunned (sparks)
-    const shakeX = isStunned ? (Math.random() - 0.5) * 3 : 0;
-    const shakeY = isStunned ? (Math.random() - 0.5) * 3 : 0;
-
-    // Smoke/sparks effect
-    if (isStunned && tick % 8 === 0) {
-      // Render small yellow star spark
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(shakeX - 10, -25 + shakeY, 3, 3);
-      ctx.fillRect(shakeX + 5, -20 + shakeY, 2, 2);
+    const outlineOffsets = [[-2, 0], [2, 0], [0, -2], [0, 2]];
+    for (const [ox, oy] of outlineOffsets) {
+      ctx.save();
+      ctx.translate(ox, oy);
+      this.drawLawnmowerShape(ctx, tick, true);
+      ctx.restore();
     }
 
-    // Main metal body (bright red)
-    ctx.fillStyle = isStunned ? '#b91c1c' : '#ef4444';
+    this.drawLawnmowerShape(ctx, tick, false);
+    ctx.restore();
+  }
+
+  private drawLawnmowerShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
+    const originalFillStyle = ctx.fillStyle;
+    const setColor = (color: string) => {
+      ctx.fillStyle = isOutline ? '#0f172a' : color;
+    };
+
+    const isStunned = this.state === 'crash_stun';
+    const shakeX = isStunned ? Math.floor((Math.random() - 0.5) * 4) : 0;
+    const shakeY = isStunned ? Math.floor((Math.random() - 0.5) * 4) : 0;
+
+    // Sparks (blocky, skip on outline)
+    if (!isOutline && isStunned && tick % 8 === 0) {
+      ctx.fillStyle = '#eab308';
+      ctx.fillRect(shakeX - 12, -22 + shakeY, 4, 4);
+      ctx.fillRect(shakeX + 8, -18 + shakeY, 3, 3);
+    }
+
+    // Main red body
+    setColor(isStunned ? '#b91c1c' : '#ef4444');
     ctx.fillRect(-20 + shakeX, -10 + shakeY, 40, 16);
 
-    // Wheels
-    ctx.fillStyle = '#334155'; // Dark wheels
-    ctx.beginPath();
-    ctx.arc(-13 + shakeX, 8 + shakeY, 6, 0, Math.PI * 2);
-    ctx.arc(13 + shakeX, 8 + shakeY, 6, 0, Math.PI * 2);
-    ctx.fill();
+    // Shading
+    setColor(isStunned ? '#7f1d1d' : '#991b1b');
+    ctx.fillRect(-20 + shakeX, 2 + shakeY, 40, 4);
 
-    // Wheel hubs (gray)
-    ctx.fillStyle = '#cbd5e1';
-    ctx.beginPath();
-    ctx.arc(-13 + shakeX, 8 + shakeY, 2, 0, Math.PI * 2);
-    ctx.arc(13 + shakeX, 8 + shakeY, 2, 0, Math.PI * 2);
-    ctx.fill();
+    // Wheels (square wheels!)
+    setColor('#1e293b');
+    ctx.fillRect(-16 + shakeX, 4 + shakeY, 8, 8);
+    ctx.fillRect(8 + shakeX, 4 + shakeY, 8, 8);
 
-    // Engine top block (black/metal)
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(-12 + shakeX, -18 + shakeY, 24, 8);
+    setColor('#cbd5e1'); // hubs
+    ctx.fillRect(-14 + shakeX, 6 + shakeY, 4, 4);
+    ctx.fillRect(10 + shakeX, 6 + shakeY, 4, 4);
 
-    // Handle (metal rod)
-    ctx.strokeStyle = '#64748b';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(-18 + shakeX, -8 + shakeY);
-    ctx.lineTo(-32 + shakeX, -24 + shakeY);
-    ctx.stroke();
+    // Engine top block
+    setColor('#334155');
+    ctx.fillRect(-10 + shakeX, -18 + shakeY, 20, 8);
 
-    ctx.restore();
+    // Handle (blocky line)
+    setColor('#64748b');
+    ctx.fillRect(-24 + shakeX, -18 + shakeY, 8, 3);
+    ctx.fillRect(-30 + shakeX, -24 + shakeY, 8, 3);
+
+    ctx.fillStyle = originalFillStyle;
   }
 
   private drawOfficerBob(ctx: CanvasRenderingContext2D, tick: number) {
@@ -467,65 +510,85 @@ export class Enemy {
     ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
     if (!this.facingRight) ctx.scale(-1, 1);
 
-    // Segway base wheel (spinning effect)
-    ctx.fillStyle = '#1e293b'; // Black tires
-    ctx.beginPath();
-    ctx.ellipse(0, 30, 20, 10, 0, 0, Math.PI * 2);
-    ctx.fill();
+    const outlineOffsets = [[-2, 0], [2, 0], [0, -2], [0, 2]];
+    for (const [ox, oy] of outlineOffsets) {
+      ctx.save();
+      ctx.translate(ox, oy);
+      this.drawOfficerBobShape(ctx, tick, true);
+      ctx.restore();
+    }
 
-    // Segway hubcaps (blue/silver)
-    ctx.fillStyle = '#94a3b8';
-    ctx.beginPath();
-    ctx.ellipse(0, 30, 12, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
+    this.drawOfficerBobShape(ctx, tick, false);
+    ctx.restore();
+  }
 
-    // Segway post/handlebars
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(8, 30);
-    ctx.lineTo(8, -10);
-    ctx.stroke();
+  private drawOfficerBobShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
+    const originalFillStyle = ctx.fillStyle;
+    const setColor = (color: string) => {
+      ctx.fillStyle = isOutline ? '#0f172a' : color;
+    };
+
+    // Segway base wheel (blocky ellipse)
+    setColor('#1e293b');
+    ctx.fillRect(-20, 26, 40, 10);
+    setColor('#475569');
+    ctx.fillRect(-12, 28, 24, 6);
+
+    // Segway post/handlebars (blocky)
+    setColor('#475569');
+    ctx.fillRect(6, -10, 4, 40);
 
     // Officer body (Blue uniform)
-    ctx.fillStyle = '#1e3a8a'; // Police blue
+    setColor('#1e3a8a');
     ctx.fillRect(-10, -25, 20, 35);
+    
+    // Yellow buttons/badge
+    if (!isOutline) {
+      ctx.fillStyle = '#eab308';
+      ctx.fillRect(-2, -18, 3, 3);
+      ctx.fillRect(-2, -10, 3, 3);
+    }
 
-    // Officer arms on handlebars
-    ctx.fillStyle = '#1e3a8a';
-    ctx.fillRect(-2, -18, 12, 6);
+    // Officer arms
+    setColor('#172554');
+    ctx.fillRect(-2, -22, 12, 6);
 
-    // Officer Head (Peach skin)
-    ctx.fillStyle = '#ffedd5';
+    // Officer Head
+    setColor('#ffedd5');
     ctx.fillRect(-7, -39, 14, 14);
 
-    // Sunglasses
-    ctx.fillStyle = '#000000';
+    // Sunglasses (pixel-art shades)
+    setColor('#000000');
     ctx.fillRect(0, -35, 8, 4);
+    if (!isOutline) {
+      // Golden bridge on glasses
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(3, -35, 2, 2);
+    }
 
-    // Police Cap (Blue and gold badge)
-    ctx.fillStyle = '#172554'; // Dark police navy
+    // mustache block
+    setColor('#451a03');
+    ctx.fillRect(0, -30, 6, 2);
+
+    // Police Cap
+    setColor('#172554');
     ctx.fillRect(-9, -43, 18, 5);
-    ctx.fillStyle = '#fbbf24'; // Golden badge
+    setColor('#fbbf24'); // gold badge
     ctx.fillRect(4, -42, 3, 3);
 
-    // Flashing siren light on Segway (orange/red/blue)
+    // Flashing siren light on Segway (orange/red/blue block)
     const flashColor = Math.floor(tick / 5) % 2 === 0 ? '#3b82f6' : '#ef4444';
-    ctx.fillStyle = flashColor;
-    ctx.beginPath();
-    ctx.arc(-8, -10, 5, 0, Math.PI * 2);
-    ctx.fill();
+    setColor(flashColor);
+    ctx.fillRect(-12, -14, 8, 8);
 
-    // Siren beam lines
-    ctx.strokeStyle = flashColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(-8, -10);
-    ctx.lineTo(-20, -18);
-    ctx.moveTo(-8, -10);
-    ctx.lineTo(-20, -2);
-    ctx.stroke();
+    // Siren beam lines (drawn as small square particles, skip on outline)
+    if (!isOutline) {
+      ctx.fillStyle = flashColor;
+      ctx.fillRect(-20, -20, 3, 3);
+      ctx.fillRect(-24, -16, 3, 3);
+      ctx.fillRect(-20, -8, 3, 3);
+    }
 
-    ctx.restore();
+    ctx.fillStyle = originalFillStyle;
   }
 }

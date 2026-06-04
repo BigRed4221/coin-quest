@@ -1,3 +1,5 @@
+import { Platform } from '../engine/Level';
+
 export class Drop {
   x: number;
   y: number;
@@ -25,7 +27,7 @@ export class Drop {
     this.vy = -Math.random() * 5 - 4;
   }
 
-  update(playerX: number, playerY: number, platforms: { x: number; y: number; w: number; h: number }[]) {
+  update(playerX: number, playerY: number, platforms: Platform[]) {
     if (this.isCollected) return;
 
     const dx = playerX - this.x;
@@ -55,6 +57,7 @@ export class Drop {
 
       // Platform collisions
       for (const p of platforms) {
+        if (p.broken) continue;
         if (
           this.x + this.radius > p.x &&
           this.x - this.radius < p.x + p.w &&
@@ -95,52 +98,35 @@ export class Drop {
     ctx.translate(-cameraX, 0);
 
     if (this.type === 'coin') {
-      // Golden glowing coin
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffd700'; // Gold
-      ctx.strokeStyle = '#d4af37';
-      ctx.lineWidth = 1.5;
-      ctx.fill();
-      ctx.stroke();
+      // Draw octagonal pixel coin
+      ctx.fillStyle = '#b8860b'; // Dark gold border
+      ctx.fillRect(this.x - 3, this.y - 6, 6, 12);
+      ctx.fillRect(this.x - 6, this.y - 3, 12, 6);
+      ctx.fillRect(this.x - 4, this.y - 5, 8, 10);
+      ctx.fillRect(this.x - 5, this.y - 4, 10, 8);
 
-      // Inner coin detail
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius - 2.5, 0, Math.PI * 2);
-      ctx.strokeStyle = '#b8860b';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.fillStyle = '#ffd700'; // Gold core
+      ctx.fillRect(this.x - 2, this.y - 5, 4, 10);
+      ctx.fillRect(this.x - 5, this.y - 2, 10, 4);
+      ctx.fillRect(this.x - 3, this.y - 4, 6, 8);
+      ctx.fillRect(this.x - 4, this.y - 3, 8, 6);
 
-      // Coin glow shadow
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = 'rgba(255, 215, 0, 0.6)';
+      ctx.fillStyle = '#fef08a'; // Inner highlights
+      ctx.fillRect(this.x - 1, this.y - 3, 2, 2);
     } else {
-      // Emerald glowing XP gem
-      ctx.beginPath();
-      ctx.moveTo(this.x, this.y - this.radius);
-      ctx.lineTo(this.x + this.radius - 1, this.y);
-      ctx.lineTo(this.x, this.y + this.radius);
-      ctx.lineTo(this.x - this.radius + 1, this.y);
-      ctx.closePath();
+      // Octagonal/diamond pixel XP gem
+      ctx.fillStyle = '#059669'; // Dark emerald border
+      ctx.fillRect(this.x - 2, this.y - 6, 4, 12);
+      ctx.fillRect(this.x - 6, this.y - 2, 12, 4);
+      ctx.fillRect(this.x - 4, this.y - 4, 8, 8);
+      
+      ctx.fillStyle = '#10b981'; // Emerald core
+      ctx.fillRect(this.x - 1, this.y - 5, 2, 10);
+      ctx.fillRect(this.x - 5, this.y - 1, 10, 2);
+      ctx.fillRect(this.x - 3, this.y - 3, 6, 6);
 
-      ctx.fillStyle = '#10b981'; // Emerald Green
-      ctx.strokeStyle = '#059669';
-      ctx.lineWidth = 1.5;
-      ctx.fill();
-      ctx.stroke();
-
-      // Inner shine
-      ctx.fillStyle = '#6ee7b7';
-      ctx.beginPath();
-      ctx.moveTo(this.x, this.y - this.radius + 2);
-      ctx.lineTo(this.x + this.radius - 3, this.y);
-      ctx.lineTo(this.x, this.y + this.radius - 3);
-      ctx.closePath();
-      ctx.fill();
-
-      // XP glow shadow
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = 'rgba(16, 185, 129, 0.6)';
+      ctx.fillStyle = '#6ee7b7'; // Inner highlight
+      ctx.fillRect(this.x - 1, this.y - 3, 2, 2);
     }
 
     ctx.restore();

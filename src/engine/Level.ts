@@ -62,7 +62,7 @@ export class Level {
     ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, 960, 540);
 
-    // 2. Parallax Clouds (Slow scrolling)
+    // 2. Parallax Clouds (Slow scrolling, blocky)
     ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
     const cloudParallax = cameraX * 0.15;
     this.drawCloud(ctx, 150 - cloudParallax, 80, 50);
@@ -72,7 +72,7 @@ export class Level {
     this.drawCloud(ctx, 1800 - cloudParallax, 90, 80);
     this.drawCloud(ctx, 2400 - cloudParallax, 60, 50);
 
-    // 3. Parallax Houses and Trees (Medium scrolling)
+    // 3. Parallax Houses and Trees (Medium scrolling, blocky)
     const midParallax = cameraX * 0.45;
     ctx.save();
     ctx.translate(-midParallax, 0);
@@ -81,28 +81,33 @@ export class Level {
     for (let x = 100; x < this.width; x += 400) {
       // Draw simple colored house silhouettes in background
       ctx.fillStyle = '#b5c6d0'; // Light slate blue-gray
-      ctx.beginPath();
-      ctx.moveTo(x, 480);
-      ctx.lineTo(x, 380);
-      ctx.lineTo(x + 80, 310);
-      ctx.lineTo(x + 160, 380);
-      ctx.lineTo(x + 160, 480);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillRect(x, 380, 160, 100);
+      
+      // Blocky roof
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(x - 10, 370, 180, 10);
+      ctx.fillRect(x + 10, 350, 140, 20);
+      ctx.fillRect(x + 30, 330, 100, 20);
+      ctx.fillRect(x + 50, 310, 60, 20);
 
       // Window detail
       ctx.fillStyle = '#fffae0'; // Light yellow glow
       ctx.fillRect(x + 30, 390, 20, 20);
       ctx.fillRect(x + 110, 390, 20, 20);
 
-      // Trees in background
+      // Window panes (pixel lines)
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(x + 39, 390, 2, 20);
+      ctx.fillRect(x + 30, 399, 20, 2);
+      ctx.fillRect(x + 119, 390, 2, 20);
+      ctx.fillRect(x + 110, 399, 20, 2);
+
+      // Trees in background (blocky pixel canopy)
       ctx.fillStyle = '#4ade80'; // Bright light green
-      ctx.beginPath();
-      ctx.arc(x - 80, 360, 35, 0, Math.PI * 2);
-      ctx.arc(x - 50, 330, 45, 0, Math.PI * 2);
-      ctx.arc(x - 20, 360, 35, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillRect(x - 90, 330, 80, 50);
+      ctx.fillRect(x - 80, 300, 60, 30);
+      ctx.fillRect(x - 70, 270, 40, 30);
+      ctx.fillRect(x - 60, 250, 20, 20);
 
       // Tree trunk
       ctx.fillStyle = '#854d0e'; // Brown trunk
@@ -111,14 +116,11 @@ export class Level {
     ctx.restore();
   }
 
-  // Draw clouds using Canvas arcs
+  // Draw clouds using Canvas rects (pixelated style)
   private drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
-    ctx.beginPath();
-    ctx.arc(x, y, size, 0, Math.PI * 2);
-    ctx.arc(x + size * 0.6, y - size * 0.3, size * 0.8, 0, Math.PI * 2);
-    ctx.arc(x + size * 1.2, y, size * 0.6, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.fill();
+    ctx.fillRect(x - size * 0.5, y, size * 1.5, size * 0.4);
+    ctx.fillRect(x - size * 0.2, y - size * 0.2, size * 1.1, size * 0.2);
+    ctx.fillRect(x + size * 0.1, y - size * 0.4, size * 0.6, size * 0.2);
   }
 
   // Draw solid level platforms (sidewalk, fences, boxes)
@@ -139,128 +141,94 @@ export class Level {
         ctx.fillRect(p.x, p.y, p.w, 4);
 
         // Expansion joints (vertical lines on the road)
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 2;
         for (let j = p.x; j < p.x + p.w; j += 150) {
-          ctx.beginPath();
-          ctx.moveTo(j, p.y + 4);
-          ctx.lineTo(j, p.y + p.h);
-          ctx.stroke();
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(j, p.y + 4, 3, p.h);
         }
       } else if (p.type === 'obstacle') {
-        // White picket fence
+        // White picket fence (sharp pixel elements)
         ctx.fillStyle = '#f8fafc'; // White
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 1;
-
-        // Draw multiple pickets
-        for (let fx = p.x; fx < p.x + p.w; fx += 8) {
-          ctx.beginPath();
-          ctx.moveTo(fx, p.y + p.h);
-          ctx.lineTo(fx, p.y + 10);
-          ctx.lineTo(fx + 3, p.y);
-          ctx.lineTo(fx + 6, p.y + 10);
-          ctx.lineTo(fx + 6, p.y + p.h);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
+        for (let fx = p.x; fx < p.x + p.w; fx += 10) {
+          ctx.fillRect(fx, p.y, 6, p.h); // Picket
+          ctx.fillRect(fx + 2, p.y - 4, 2, 4); // Pointy top
         }
         
         // Draw crossbeams
+        ctx.fillStyle = '#cbd5e1';
         ctx.fillRect(p.x, p.y + 15, p.w, 4);
         ctx.fillRect(p.x, p.y + p.h - 20, p.w, 4);
       } else if (p.type === 'box') {
-        // Cardboard Box
+        // Cardboard Box (blocky borders)
         ctx.fillStyle = '#ca8a04'; // Brownish cardboard
-        ctx.strokeStyle = '#854d0e';
-        ctx.lineWidth = 2;
         ctx.fillRect(p.x, p.y, p.w, p.h);
-        ctx.strokeRect(p.x, p.y, p.w, p.h);
+        
+        ctx.fillStyle = '#854d0e'; // Border outline
+        ctx.fillRect(p.x, p.y, p.w, 2);
+        ctx.fillRect(p.x, p.y + p.h - 2, p.w, 2);
+        ctx.fillRect(p.x, p.y, 2, p.h);
+        ctx.fillRect(p.x + p.w - 2, p.y, 2, p.h);
 
         // Cardboard shipping tape details
         ctx.fillStyle = '#eab308'; // Yellow tape
         ctx.fillRect(p.x + p.w / 2 - 4, p.y, 8, p.h);
 
         // Cardboard wrinkles/lines
-        ctx.strokeStyle = 'rgba(133, 77, 14, 0.4)';
-        ctx.beginPath();
-        ctx.moveTo(p.x + 5, p.y + 10);
-        ctx.lineTo(p.x + p.w - 5, p.y + 10);
-        ctx.moveTo(p.x + 5, p.y + p.h - 10);
-        ctx.lineTo(p.x + p.w - 5, p.y + p.h - 10);
-        ctx.stroke();
+        ctx.fillStyle = 'rgba(133, 77, 14, 0.4)';
+        ctx.fillRect(p.x + 5, p.y + 10, p.w - 10, 2);
+        ctx.fillRect(p.x + 5, p.y + p.h - 12, p.w - 10, 2);
       } else if (p.type === 'gate') {
         // High security metal neighborhood gate
         ctx.fillStyle = '#334155'; // Dark metal
         ctx.fillRect(p.x, p.y, p.w, p.h);
 
+        ctx.fillStyle = '#475569'; // Border shading
+        ctx.fillRect(p.x, p.y, 4, p.h);
+        ctx.fillRect(p.x + p.w - 4, p.y, 4, p.h);
+
         // Security bars
-        ctx.strokeStyle = '#f1f5f9';
-        ctx.lineWidth = 3;
+        ctx.fillStyle = '#cbd5e1';
         for (let gy = p.y + 10; gy < p.y + p.h; gy += 25) {
-          ctx.beginPath();
-          ctx.moveTo(p.x, gy);
-          ctx.lineTo(p.x + p.w, gy);
-          ctx.stroke();
+          ctx.fillRect(p.x, gy, p.w, 3);
         }
       }
     }
 
     // --- Draw Campfire (Checkpoint) ---
-    // Let's render the campfire dynamically
     this.drawCampfire(ctx, this.campfireX, 480, campfireFrame);
 
     ctx.restore();
   }
 
-  // Animating Campfire check point
+  // Animating Campfire check point (blocky flame shapes)
   private drawCampfire(ctx: CanvasRenderingContext2D, x: number, groundY: number, frame: number) {
     ctx.save();
     
-    // Stones circle base
-    ctx.fillStyle = '#64748b'; // Slate gray stones
-    ctx.beginPath();
-    ctx.ellipse(x, groundY - 2, 25, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // Stones base (blocky)
+    ctx.fillStyle = '#64748b'; // Slate stones
+    ctx.fillRect(x - 24, groundY - 4, 48, 4);
+    ctx.fillRect(x - 18, groundY - 6, 36, 2);
+    ctx.fillRect(x - 8, groundY - 8, 16, 2);
 
-    // Wood logs
-    ctx.fillStyle = '#7c2d12'; // Dark reddish brown wood logs
-    ctx.fillRect(x - 15, groundY - 8, 30, 6);
-    ctx.fillRect(x - 8, groundY - 12, 16, 6);
+    // Wood logs (blocky bars)
+    ctx.fillStyle = '#7c2d12'; // Log 1
+    ctx.fillRect(x - 16, groundY - 12, 32, 5);
+    ctx.fillStyle = '#9a3412'; // Log 2
+    ctx.fillRect(x - 10, groundY - 17, 20, 5);
 
-    // Animating flames (layers of orange, yellow, and red arcs)
-    const flameHeight = 15 + Math.sin(frame * 0.25) * 6;
+    // Animating flames (blocky layers)
+    const flameHeight = 16 + Math.floor(Math.sin(frame * 0.3) * 6);
     
     // Outer flame (red)
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
-    ctx.beginPath();
-    ctx.moveTo(x - 12, groundY - 8);
-    ctx.quadraticCurveTo(x - 5, groundY - 12, x, groundY - 8 - flameHeight);
-    ctx.quadraticCurveTo(x + 5, groundY - 12, x + 12, groundY - 8);
-    ctx.closePath();
-    ctx.fill();
-
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(x - 12, groundY - 17 - flameHeight, 24, flameHeight);
+    
     // Mid flame (orange)
-    ctx.fillStyle = 'rgba(249, 115, 22, 0.9)';
-    ctx.beginPath();
-    ctx.moveTo(x - 8, groundY - 8);
-    ctx.quadraticCurveTo(x - 3, groundY - 10, x, groundY - 8 - flameHeight * 0.7);
-    ctx.quadraticCurveTo(x + 3, groundY - 10, x + 8, groundY - 8);
-    ctx.closePath();
-    ctx.fill();
-
+    ctx.fillStyle = '#f97316';
+    ctx.fillRect(x - 8, groundY - 17 - Math.floor(flameHeight * 0.75), 16, Math.floor(flameHeight * 0.75));
+    
     // Inner flame (yellow)
-    ctx.fillStyle = 'rgba(253, 224, 71, 0.95)';
-    ctx.beginPath();
-    ctx.moveTo(x - 4, groundY - 8);
-    ctx.quadraticCurveTo(x - 1, groundY - 9, x, groundY - 8 - flameHeight * 0.4);
-    ctx.quadraticCurveTo(x + 1, groundY - 9, x + 4, groundY - 8);
-    ctx.closePath();
-    ctx.fill();
-
-    // Fire glow
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = 'rgba(249, 115, 22, 0.5)';
+    ctx.fillStyle = '#fde047';
+    ctx.fillRect(x - 4, groundY - 17 - Math.floor(flameHeight * 0.45), 8, Math.floor(flameHeight * 0.45));
 
     ctx.restore();
   }

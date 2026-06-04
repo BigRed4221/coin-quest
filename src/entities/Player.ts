@@ -1,4 +1,6 @@
 
+import { Platform } from '../engine/Level';
+
 export type SkillName = 'Coin Slide' | 'Coin Toss' | 'Golden Shield';
 
 export class Player {
@@ -8,6 +10,10 @@ export class Player {
   vy: number = 0;
   width: number = 32;
   height: number = 64;
+
+  // Skill triggers / communication flags
+  coinTossTriggered: boolean = false;
+  shieldAbsorbedHit: boolean = false;
 
   // Stats
   health: number = 100;
@@ -81,6 +87,9 @@ export class Player {
     this.comboTimer = 0;
     this.attackActiveTimer = 0;
     this.attackCooldown = 0;
+    this.coinTossTriggered = false;
+    this.shieldAbsorbedHit = false;
+    this.isCrouching = false;
     
     // Starting loadout: starts with no skills in slot 1 and 2
     this.unlockedSkills = [];
@@ -104,11 +113,17 @@ export class Player {
 
     // 1. Crouch logic (S)
     if (keys['s'] || keys['ArrowDown']) {
-      this.isCrouching = true;
+      if (!this.isCrouching) {
+        this.isCrouching = true;
+        this.y += this.height / 2;
+      }
       this.isRunning = false;
       this.vx *= 0.5; // Slide to a halt
     } else {
-      this.isCrouching = false;
+      if (this.isCrouching) {
+        this.isCrouching = false;
+        this.y -= this.height / 2;
+      }
     }
 
     // 2. Move left/right (A/D) if not crouching
@@ -184,12 +199,18 @@ export class Player {
       this.isShieldActive = true;
       this.shieldTimer = 300; // Shield lasts 5 seconds
     } else if (skillName === 'Coin Toss') {
-      // Handled in GameEngine by spawning a projectile
+      this.coinTossTriggered = true;
     }
   }
 
   takeDamage(amount: number) {
     if (this.invulnerableTimer > 0 || this.health <= 0) return;
+
+    if (this.isShieldActive) {
+      this.shieldAbsorbedHit = true;
+      this.invulnerableTimer = 20; // Brief invulnerability grace period
+      return;
+    }
 
     this.health -= amount;
     this.invulnerableTimer = 60; // 1 second of I-frames
@@ -200,7 +221,7 @@ export class Player {
     this.vx = this.facingRight ? -4 : 4;
   }
 
-  update(platforms: { x: number; y: number; w: number; h: number; type: string }[]) {
+  update(platforms: Platform[]) {
     // 1. Cooldowns & Timers ticks
     for (const key in this.cooldowns) {
       const skill = key as SkillName;
@@ -256,7 +277,12 @@ export class Player {
 
     // Check platform collisions
     for (const p of platforms) {
-      if (p.type === 'ground' || p.type === 'obstacle' || p.type === 'box') {
+      if (
+        p.type === 'ground' ||
+        p.type === 'obstacle' ||
+        (p.type === 'box' && !p.broken) ||
+        (p.type === 'gate' && !p.broken)
+      ) {
         const playerLeft = this.x;
         const playerRight = this.x + this.width;
         const playerBottom = this.y + currentHeight;
@@ -312,175 +338,272 @@ export class Player {
       return; // Skip rendering for flash effect
     }
 
-    ctx.save();
-    ctx.translate(this.x + this.width / 2 - cameraX, this.y + (this.isCrouching ? this.height / 4 : 0) + this.height / 2);
-    if (!this.facingRight) ctx.scale(-1, 1);
+    const currentHeight = this.isCrouching ? this.height / 2 : this.height;
 
-    // Dynamic Bobbing
-    const bob = (this.isRunning && !this.isCoinSliding) ? Math.sin(tick * 0.45) * 3 : 0;
+    ctx.save();
+    // Translate directly to feet level
+    ctx.translate(this.x + this.width / 2 - cameraX, this.y + currentHeight);
+    if (!this.facingRight) ctx.scale(-1, 1);
 
     // --- Draw Golden Shield (If active) ---
     if (this.isShieldActive) {
-      ctx.strokeStyle = 'rgba(255, 215, 0, 0.8)';
-      ctx.lineWidth = 2.5;
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = 'rgba(255, 215, 0, 0.7)';
-      
-      ctx.beginPath();
-      ctx.arc(0, 0, 35, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
+      ctx.fillRect(-20, -35, 40, 3);
+      ctx.fillRect(-20, 32, 40, 3);
+      ctx.fillRect(-35, -20, 3, 40);
+      ctx.fillRect(32, -20, 3, 40);
+      ctx.fillRect(-30, -30, 10, 3);
+      ctx.fillRect(20, -30, 10, 3);
+      ctx.fillRect(-30, 27, 10, 3);
+      ctx.fillRect(20, 27, 10, 3);
 
       // Spin shield coins
       const shieldSpinAngle = tick * 0.08;
       for (let i = 0; i < 3; i++) {
         const angle = shieldSpinAngle + (i * Math.PI * 2) / 3;
-        const cx = Math.cos(angle) * 35;
-        const cy = Math.sin(angle) * 35;
+        const cx = Math.floor(Math.cos(angle) * 35);
+        const cy = Math.floor(Math.sin(angle) * 35);
         ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.shadowBlur = 0; // Reset shadow
-    }
-
-    // --- Draw Carl's Body Parts ---
-    if (this.isCoinSliding) {
-      this.drawSlide(ctx);
-    } else {
-      // 1. Legs / Sneakers
-      ctx.fillStyle = '#1e40af'; // Blue jeans
-      if (this.isRunning) {
-        const legSwing = Math.sin(tick * 0.35) * 12;
-        ctx.fillRect(-10, 8 + bob, 8, 16 - legSwing); // Left Leg
-        ctx.fillRect(2, 8 + bob, 8, 16 + legSwing); // Right Leg
-        ctx.fillStyle = '#f8fafc'; // White sneakers
-        ctx.fillRect(-11, 24 + bob - legSwing, 10, 5);
-        ctx.fillRect(1, 24 + bob + legSwing, 10, 5);
-      } else {
-        ctx.fillRect(-10, 8, 8, 16);
-        ctx.fillRect(2, 8, 8, 16);
-        ctx.fillStyle = '#f8fafc'; // White sneakers
-        ctx.fillRect(-11, 24, 10, 5);
-        ctx.fillRect(1, 24, 10, 5);
-      }
-
-      // 2. Torso (Faded light-blue T-shirt)
-      ctx.fillStyle = '#0ea5e9'; // Cyan/Light-blue
-      ctx.fillRect(-12, -20 + bob, 24, 28);
-      
-      // "C" detail on shirt
-      ctx.fillStyle = '#f8fafc';
-      ctx.font = '8px Outfit';
-      ctx.fillText("C", -3, -5 + bob);
-
-      // 3. Head (Peach Skin + Brown hair)
-      ctx.fillStyle = '#ffedd5'; // Peach skin
-      ctx.fillRect(-8, -36 + bob, 16, 16);
-      
-      ctx.fillStyle = '#7c2d12'; // Brown hair
-      ctx.fillRect(-9, -39 + bob, 18, 5);
-      ctx.fillRect(-9, -36 + bob, 4, 10); // Sideburns
-
-      // 4. Arms (Punches animations)
-      ctx.fillStyle = '#0ea5e9'; // Sleeve
-      ctx.strokeStyle = '#ffedd5'; // Skin fist
-      ctx.lineWidth = 8;
-      ctx.lineCap = 'round';
-
-      if (this.attackActiveTimer > 0) {
-        if (this.comboStep === 1) {
-          // Left Punch (Front arm extended)
-          ctx.beginPath();
-          ctx.moveTo(-4, -12 + bob);
-          ctx.lineTo(24, -12 + bob); // Extended fist
-          ctx.stroke();
-        } else if (this.comboStep === 2) {
-          // Right Punch (Back arm extended)
-          ctx.beginPath();
-          ctx.moveTo(-4, -5 + bob);
-          ctx.lineTo(26, -5 + bob); // Extended fist
-          ctx.stroke();
-        } else if (this.comboStep === 3) {
-          // Roundhouse Kick (Body rotated, leg extended horizontally)
-          ctx.strokeStyle = '#1e40af'; // Blue denim kick leg
-          ctx.beginPath();
-          ctx.moveTo(0, 0 + bob);
-          ctx.lineTo(28, -6 + bob); // Extended leg
-          ctx.stroke();
-          ctx.fillStyle = '#f8fafc'; // Sneaker tip
-          ctx.fillRect(26, -9 + bob, 7, 5);
-        }
-      } else {
-        // Normal arm hanging/swimming
-        ctx.beginPath();
-        ctx.moveTo(-6, -16 + bob);
-        ctx.lineTo(-12, -2 + bob);
-        ctx.stroke();
+        ctx.fillRect(cx - 5, cy - 5, 10, 10);
+        ctx.fillStyle = '#b8860b';
+        ctx.fillRect(cx - 6, cy - 3, 1, 6);
+        ctx.fillRect(cx + 5, cy - 3, 1, 6);
+        ctx.fillRect(cx - 3, cy - 6, 6, 1);
+        ctx.fillRect(cx - 3, cy + 5, 6, 1);
       }
     }
+
+    // --- Draw Outlines ---
+    const outlineOffsets = [
+      [-2, 0], [2, 0], [0, -2], [0, 2]
+    ];
+    for (const [ox, oy] of outlineOffsets) {
+      ctx.save();
+      ctx.translate(ox, oy);
+      this.drawPlayerShape(ctx, tick, true);
+      ctx.restore();
+    }
+
+    // --- Draw Color Sprite ---
+    this.drawPlayerShape(ctx, tick, false);
 
     ctx.restore();
 
-    // Draw visual attack arcs
+    // Draw visual attack arcs (blocky)
     if (this.attackActiveTimer > 0) {
       this.drawAttackArc(ctx, cameraX);
     }
   }
 
-  private drawSlide(ctx: CanvasRenderingContext2D) {
-    // Slanted slide body (fast dashing animation)
-    ctx.fillStyle = '#1e40af'; // Jeans
-    ctx.fillRect(-22, 10, 36, 12);
-    ctx.fillStyle = '#0ea5e9'; // Torso tilted
-    ctx.fillRect(-10, -5, 24, 15);
-    ctx.fillStyle = '#ffedd5'; // Head
-    ctx.fillRect(8, -12, 12, 12);
-    ctx.fillStyle = '#7c2d12'; // Hair
-    ctx.fillRect(6, -14, 14, 4);
+  private drawPlayerShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
+    const originalFillStyle = ctx.fillStyle;
+    const setColor = (color: string) => {
+      ctx.fillStyle = isOutline ? '#000000' : color;
+    };
 
-    // Dust smoke trail back of slide
-    ctx.fillStyle = 'rgba(226, 232, 240, 0.6)';
-    ctx.beginPath();
-    ctx.arc(-26, 16, 8, 0, Math.PI * 2);
-    ctx.arc(-36, 18, 5, 0, Math.PI * 2);
-    ctx.fill();
+    const bob = (this.isRunning && !this.isCoinSliding) ? Math.floor(Math.sin(tick * 0.45) * 3) : 0;
+
+    if (this.isCoinSliding) {
+      this.drawSlideShape(ctx, isOutline);
+    } else {
+      if (this.isCrouching) {
+        // --- Crouched Carl ---
+        // 1. Legs / Sneakers
+        setColor('#1e40af'); // Blue jeans
+        ctx.fillRect(-10, -10 + bob, 8, 6);
+        
+        // SUPPORT LEG KICK FIX: Only draw supporting leg when not roundhouse kicking
+        if (!(this.attackActiveTimer > 0 && this.comboStep === 3)) {
+          ctx.fillRect(2, -10 + bob, 8, 6);
+          setColor('#f8fafc'); // White sneakers
+          ctx.fillRect(1, -4, 10, 4);
+        }
+        setColor('#f8fafc'); // White sneakers
+        ctx.fillRect(-11, -4, 10, 4);
+
+        // 2. Torso (Faded light-blue T-shirt)
+        setColor('#0ea5e9'); // Cyan
+        ctx.fillRect(-12, -22 + bob, 24, 12);
+        
+        // 3. Head (Peach Skin + Brown hair)
+        setColor('#ffedd5'); // Peach skin
+        ctx.fillRect(-8, -38 + bob, 16, 16);
+        
+        if (!isOutline) {
+          ctx.fillStyle = '#1e3a8a'; // Blue eye
+          ctx.fillRect(4, -34 + bob, 2, 2);
+          ctx.fillStyle = '#7c2d12'; // Brown beard
+          ctx.fillRect(2, -26 + bob, 5, 2);
+        }
+
+        setColor('#7c2d12'); // Brown hair
+        ctx.fillRect(-9, -41 + bob, 18, 5);
+        ctx.fillRect(-9, -38 + bob, 4, 8); // Sideburns
+
+        // 4. Arms
+        setColor('#0ea5e9'); // Sleeve
+        if (this.attackActiveTimer > 0) {
+          if (this.comboStep === 1) {
+            ctx.fillRect(-4, -18 + bob, 28, 6); // Punch
+          } else if (this.comboStep === 2) {
+            ctx.fillRect(-4, -14 + bob, 30, 6); // Punch
+          } else if (this.comboStep === 3) {
+            setColor('#1e40af'); // blue kick leg
+            ctx.fillRect(-2, -10 + bob, 30, 8); // Kick
+          }
+        } else {
+          ctx.fillRect(-6, -18 + bob, 4, 8); // Hanging arm
+        }
+      } else {
+        // --- Standing Carl ---
+        // 1. Legs / Sneakers
+        setColor('#1e40af'); // Blue jeans
+        if (this.isRunning) {
+          const legSwing = Math.floor(Math.sin(tick * 0.35) * 6);
+          ctx.fillRect(-10, -21 + bob, 8, 16 - legSwing); // Left Leg
+          
+          // SUPPORT LEG KICK FIX
+          if (!(this.attackActiveTimer > 0 && this.comboStep === 3)) {
+            ctx.fillRect(2, -21 + bob, 8, 16 + legSwing); // Right Leg
+            setColor('#f8fafc'); // White sneakers
+            ctx.fillRect(1, -5 + legSwing, 10, 5);
+          }
+          setColor('#f8fafc'); // White sneakers
+          ctx.fillRect(-11, -5 - legSwing, 10, 5);
+        } else {
+          ctx.fillRect(-10, -21, 8, 16);
+          
+          // SUPPORT LEG KICK FIX
+          if (!(this.attackActiveTimer > 0 && this.comboStep === 3)) {
+            ctx.fillRect(2, -21, 8, 16);
+            setColor('#f8fafc'); // White sneakers
+            ctx.fillRect(1, -5, 10, 5);
+          }
+          setColor('#f8fafc'); // White sneakers
+          ctx.fillRect(-11, -5, 10, 5);
+        }
+
+        // 2. Torso (Faded light-blue T-shirt)
+        setColor('#0ea5e9'); // Cyan
+        ctx.fillRect(-12, -49 + bob, 24, 28);
+        
+        if (!isOutline) {
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = '8px Outfit';
+          ctx.fillText("C", -3, -34 + bob);
+        }
+
+        // 3. Head (Peach Skin + Brown hair)
+        setColor('#ffedd5'); // Peach skin
+        ctx.fillRect(-8, -65 + bob, 16, 16);
+
+        if (!isOutline) {
+          ctx.fillStyle = '#1e3a8a'; // Blue eye
+          ctx.fillRect(4, -61 + bob, 2, 2);
+          ctx.fillStyle = '#7c2d12'; // Brown beard
+          ctx.fillRect(2, -53 + bob, 5, 2);
+        }
+        
+        setColor('#7c2d12'); // Brown hair
+        ctx.fillRect(-9, -68 + bob, 18, 5);
+        ctx.fillRect(-9, -65 + bob, 4, 10); // Sideburns
+
+        // 4. Arms
+        setColor('#0ea5e9'); // Sleeve
+        if (this.attackActiveTimer > 0) {
+          if (this.comboStep === 1) {
+            ctx.fillRect(-4, -41 + bob, 28, 6);
+          } else if (this.comboStep === 2) {
+            ctx.fillRect(-4, -34 + bob, 30, 6);
+          } else if (this.comboStep === 3) {
+            setColor('#1e40af'); // blue kick leg
+            ctx.fillRect(-2, -21 + bob, 30, 8);
+          }
+        } else {
+          ctx.fillRect(-6, -41 + bob, 4, 14);
+        }
+      }
+    }
+
+    ctx.fillStyle = originalFillStyle;
+  }
+
+  private drawSlideShape(ctx: CanvasRenderingContext2D, isOutline: boolean) {
+    const originalFillStyle = ctx.fillStyle;
+    const setColor = (color: string) => {
+      ctx.fillStyle = isOutline ? '#000000' : color;
+    };
+
+    // Slanted slide body (blocky)
+    setColor('#1e40af'); // Jeans
+    ctx.fillRect(-22, -12, 36, 12);
+    setColor('#0ea5e9'); // Torso tilted
+    ctx.fillRect(-10, -27, 24, 15);
+    setColor('#ffedd5'); // Head
+    ctx.fillRect(8, -34, 12, 12);
+    setColor('#7c2d12'); // Hair
+    ctx.fillRect(6, -36, 14, 4);
+
+    // Dust smoke trail (skip on outline)
+    if (!isOutline) {
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.6)';
+      ctx.fillRect(-34, -10, 12, 12);
+      ctx.fillRect(-44, -6, 8, 8);
+    }
+
+    ctx.fillStyle = originalFillStyle;
   }
 
   private drawDead(ctx: CanvasRenderingContext2D, cameraX: number) {
     ctx.save();
-    ctx.translate(this.x + this.width / 2 - cameraX, this.y + this.height - 10);
-    // Render lying down flat
+    ctx.translate(this.x + this.width / 2 - cameraX, this.y + this.height - 5);
     ctx.rotate(Math.PI / 2);
-    ctx.fillStyle = '#0ea5e9';
-    ctx.fillRect(-12, -20, 24, 28); // Torso
-    ctx.fillStyle = '#ffedd5';
-    ctx.fillRect(-8, -36, 16, 16); // Head
-    ctx.fillStyle = '#7c2d12';
-    ctx.fillRect(-9, -39, 18, 5); // Hair
-    ctx.fillStyle = '#1e40af';
-    ctx.fillRect(-10, 8, 8, 12); // Legs
+
+    const outlineOffsets = [
+      [-2, 0], [2, 0], [0, -2], [0, 2]
+    ];
+    for (const [ox, oy] of outlineOffsets) {
+      ctx.save();
+      ctx.translate(ox, oy);
+      this.drawDeadShape(ctx, true);
+      ctx.restore();
+    }
+
+    this.drawDeadShape(ctx, false);
     ctx.restore();
+  }
+
+  private drawDeadShape(ctx: CanvasRenderingContext2D, isOutline: boolean) {
+    const originalFillStyle = ctx.fillStyle;
+    const setColor = (color: string) => {
+      ctx.fillStyle = isOutline ? '#000000' : color;
+    };
+
+    setColor('#0ea5e9');
+    ctx.fillRect(-12, -20, 24, 28); // Torso
+    setColor('#ffedd5');
+    ctx.fillRect(-8, -36, 16, 16); // Head
+    setColor('#7c2d12');
+    ctx.fillRect(-9, -39, 18, 5); // Hair
+    setColor('#1e40af');
+    ctx.fillRect(-10, 8, 8, 12); // Legs
+
+    ctx.fillStyle = originalFillStyle;
   }
 
   private drawAttackArc(ctx: CanvasRenderingContext2D, cameraX: number) {
     ctx.save();
     ctx.translate(-cameraX, 0);
 
-    ctx.strokeStyle = this.comboStep === 3 ? 'rgba(6, 182, 212, 0.7)' : 'rgba(255, 255, 255, 0.6)';
-    ctx.lineWidth = this.comboStep === 3 ? 5 : 3;
-    ctx.beginPath();
-
+    ctx.fillStyle = this.comboStep === 3 ? 'rgba(6, 182, 212, 0.8)' : 'rgba(255, 255, 255, 0.7)';
     const currentHeight = this.isCrouching ? this.height / 2 : this.height;
-    const ax = this.facingRight ? this.x + this.width + 5 : this.x - 25;
-    const ay = this.y + currentHeight / 2 - (this.comboStep === 3 ? 10 : 20);
+    const ax = this.facingRight ? this.x + this.width + 5 : this.x - 20;
+    const ay = this.y + currentHeight / 2 - 5;
 
-    if (this.facingRight) {
-      ctx.arc(ax, ay, this.comboStep === 3 ? 24 : 18, -Math.PI / 4, Math.PI / 4);
-    } else {
-      ctx.arc(ax + 20, ay, this.comboStep === 3 ? 24 : 18, Math.PI * 0.75, Math.PI * 1.25);
-    }
-    ctx.stroke();
+    // Draw a blocky 3-step slash arc
+    ctx.fillRect(ax, ay - 12, 6, 24);
+    ctx.fillRect(ax + (this.facingRight ? 6 : -6), ay - 6, 6, 18);
+    ctx.fillRect(ax + (this.facingRight ? 12 : -12), ay, 6, 12);
 
     ctx.restore();
   }
