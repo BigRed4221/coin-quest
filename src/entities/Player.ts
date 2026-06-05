@@ -117,8 +117,6 @@ export class Player {
         this.isCrouching = true;
         this.y += this.height / 2;
       }
-      this.isRunning = false;
-      this.vx *= 0.5; // Slide to a halt
     } else {
       if (this.isCrouching) {
         this.isCrouching = false;
@@ -126,18 +124,19 @@ export class Player {
       }
     }
 
-    // 2. Move left/right (A/D) if not crouching
-    if (!this.isCrouching) {
-      if (keys['a'] || keys['ArrowLeft']) {
-        this.vx = -this.moveSpeed;
-        this.facingRight = false;
-        this.isRunning = true;
-      } else if (keys['d'] || keys['ArrowRight']) {
-        this.vx = this.moveSpeed;
-        this.facingRight = true;
-        this.isRunning = true;
-      } else {
-        this.isRunning = false;
+    // 2. Move left/right (A/D)
+    if (keys['a'] || keys['ArrowLeft']) {
+      this.vx = this.isCrouching ? -this.moveSpeed * 0.35 : -this.moveSpeed;
+      this.facingRight = false;
+      this.isRunning = true;
+    } else if (keys['d'] || keys['ArrowRight']) {
+      this.vx = this.isCrouching ? this.moveSpeed * 0.35 : this.moveSpeed;
+      this.facingRight = true;
+      this.isRunning = true;
+    } else {
+      this.isRunning = false;
+      if (this.isCrouching) {
+        this.vx *= 0.5; // Slide to a halt when crouching
       }
     }
 
@@ -280,6 +279,8 @@ export class Player {
       if (
         p.type === 'ground' ||
         p.type === 'obstacle' ||
+        p.type === 'overhang' ||
+        (p.type === 'trashcan' && !p.broken) ||
         (p.type === 'box' && !p.broken) ||
         (p.type === 'gate' && !p.broken)
       ) {

@@ -3,17 +3,18 @@ export interface Platform {
   y: number;
   w: number;
   h: number;
-  type: 'ground' | 'obstacle' | 'box' | 'checkpoint' | 'gate';
+  type: 'ground' | 'obstacle' | 'box' | 'checkpoint' | 'gate' | 'overhang' | 'trashcan';
   broken?: boolean;
+  isBarrier?: boolean;
 }
 
 export class Level {
-  width: number = 3200;
+  width: number = 3600;
   height: number = 540;
   platforms: Platform[] = [];
-  campfireX: number = 1600;
-  bossTriggerX: number = 2500;
-  endGateX: number = 3100;
+  campfireX: number = 1800;
+  bossTriggerX: number = 3100;
+  endGateX: number = 3500;
   
   constructor() {
     this.initLevel();
@@ -26,30 +27,27 @@ export class Level {
     this.platforms.push({ x: 0, y: 480, w: this.width, h: 60, type: 'ground' });
 
     // --- Tutorial Obstacles ---
-    // Grandma's Picket Fence (Jump 1)
-    this.platforms.push({ x: 450, y: 420, w: 20, h: 60, type: 'obstacle' });
+    // Grandma's Picket Fence (Jump 1) at X = 400
+    this.platforms.push({ x: 400, y: 420, w: 20, h: 60, type: 'obstacle' });
     
-    // Trash Cans (Jump 2)
-    this.platforms.push({ x: 800, y: 420, w: 35, h: 60, type: 'obstacle' });
+    // Low tree branch overhang (Crouch Tutorial) at X = 600
+    this.platforms.push({ x: 600, y: 320, w: 80, h: 120, type: 'overhang' });
 
-    // Cardboard Box Stack (Combat Tutorial)
-    // Three breakable boxes stacked together
-    this.platforms.push({ x: 1100, y: 420, w: 40, h: 60, type: 'box', broken: false });
-    this.platforms.push({ x: 1140, y: 420, w: 40, h: 60, type: 'box', broken: false });
+    // Breakable Trash Can (Combat Tutorial) at X = 950
+    this.platforms.push({ x: 950, y: 420, w: 40, h: 60, type: 'trashcan', broken: false });
 
     // --- Midpoint Campfire Checkpoint ---
-    // Campfire sits at X: 1600. It is a checkpoint.
+    // Campfire sits at X: 1800.
     
     // --- Post-Campfire Obstacles ---
     // Fences and concrete walls
-    this.platforms.push({ x: 1950, y: 400, w: 25, h: 80, type: 'obstacle' });
     
-    // A raised wooden deck platform
-    this.platforms.push({ x: 2150, y: 380, w: 160, h: 20, type: 'ground' });
-    this.platforms.push({ x: 2350, y: 340, w: 160, h: 20, type: 'ground' });
+    // Raised wooden deck platforms
+    this.platforms.push({ x: 2350, y: 380, w: 160, h: 20, type: 'ground' });
+    this.platforms.push({ x: 2600, y: 340, w: 160, h: 20, type: 'ground' });
 
     // --- The End Gate ---
-    // Officer Bob blocks the gate at 2650
+    // Officer Bob blocks the gate at 3250
     this.platforms.push({ x: this.endGateX, y: 200, w: 30, h: 280, type: 'gate' });
   }
 
@@ -129,7 +127,7 @@ export class Level {
     ctx.translate(-cameraX, 0);
 
     for (const p of this.platforms) {
-      if (p.broken) continue;
+      if (p.broken || p.isBarrier) continue;
 
       if (p.type === 'ground') {
         // Sidewalk styling
@@ -189,6 +187,29 @@ export class Level {
         ctx.fillStyle = '#cbd5e1';
         for (let gy = p.y + 10; gy < p.y + p.h; gy += 25) {
           ctx.fillRect(p.x, gy, p.w, 3);
+        }
+      } else if (p.type === 'overhang') {
+        // Draw a tree branch overhang (slate brown branch with green pixel leaves)
+        ctx.fillStyle = '#78350f'; // Dark brown branch
+        ctx.fillRect(p.x, p.y + p.h - 20, p.w, 20); // main branch
+        
+        ctx.fillStyle = '#15803d'; // Green leaves
+        ctx.fillRect(p.x - 10, p.y, p.w + 20, p.h - 20);
+        ctx.fillStyle = '#166534'; // Shading leaves
+        ctx.fillRect(p.x, p.y + 20, p.w, p.h - 40);
+      } else if (p.type === 'trashcan') {
+        // Draw corrugated steel trash can
+        ctx.fillStyle = '#64748b'; // Slate gray
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        
+        ctx.fillStyle = '#475569'; // Dark slate lid
+        ctx.fillRect(p.x, p.y, p.w, 4);
+        ctx.fillRect(p.x + 6, p.y - 4, p.w - 12, 4); // lid handle
+        
+        // Corrugation lines
+        ctx.fillStyle = '#334155';
+        for (let cx = p.x + 8; cx < p.x + p.w; cx += 10) {
+          ctx.fillRect(cx, p.y + 4, 3, p.h - 6);
         }
       }
     }

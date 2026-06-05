@@ -1,7 +1,7 @@
 import { Drop } from './Drop';
 import { Platform } from '../engine/Level';
 
-export type EnemyType = 'pigeon' | 'dog' | 'lawnmower' | 'officer_bob';
+export type EnemyType = 'pigeon' | 'dog' | 'inspector' | 'officer_bob';
 
 export class Enemy {
   x: number;
@@ -57,12 +57,12 @@ export class Enemy {
       this.health = 30; // 3 hits
       this.maxHealth = 30;
       this.speed = 1.5;
-    } else if (type === 'lawnmower') {
-      this.width = 45;
-      this.height = 30;
-      this.health = 60; // 6 hits once vulnerable
-      this.maxHealth = 60;
-      this.speed = 2.5;
+    } else if (type === 'inspector') {
+      this.width = 30;
+      this.height = 60;
+      this.health = 40; // 4 hits normally
+      this.maxHealth = 40;
+      this.speed = 1.2;
       this.vx = this.speed;
     } else {
       // Officer Bob (Boss)
@@ -75,13 +75,23 @@ export class Enemy {
     }
   }
 
-  takeDamage(amount: number, knockbackX: number, playerX: number): Drop[] | null {
+  takeDamage(amount: number, knockbackX: number, playerX: number, isKick: boolean = false): Drop[] | null {
     if (this.state === 'dead') return null;
 
-    // Lawnmower is immune unless it's in crashed stun state!
-    if (this.type === 'lawnmower' && this.state !== 'crash_stun') {
-      // Sparks bounce off
-      return null;
+    // HOA Inspector is immune to front attacks unless it's a guard break kick or it's in guard-broken state!
+    if (this.type === 'inspector') {
+      const isFront = this.facingRight ? (playerX > this.x) : (playerX < this.x);
+      
+      // If attacked from front, and not a Kick, and not in stun state, block it!
+      if (isFront && !isKick && this.state !== 'crash_stun') {
+        return null;
+      }
+
+      // If it is a Kick from front, and not in stun state, trigger guard break!
+      if (isFront && isKick && this.state !== 'crash_stun') {
+        this.state = 'crash_stun';
+        this.bossStateTimer = 120; // 2 seconds stun duration
+      }
     }
 
     this.health -= amount;
@@ -106,8 +116,8 @@ export class Enemy {
 
   private spawnDrops(): Drop[] {
     const drops: Drop[] = [];
-    const coinCount = this.type === 'officer_bob' ? 20 : (this.type === 'dog' ? 4 : (this.type === 'lawnmower' ? 6 : 2));
-    const xpCount = this.type === 'officer_bob' ? 15 : (this.type === 'dog' ? 3 : (this.type === 'lawnmower' ? 4 : 2));
+    const coinCount = this.type === 'officer_bob' ? 20 : (this.type === 'dog' ? 4 : (this.type === 'inspector' ? 6 : 2));
+    const xpCount = this.type === 'officer_bob' ? 15 : (this.type === 'dog' ? 3 : (this.type === 'inspector' ? 4 : 2));
 
     for (let i = 0; i < coinCount; i++) {
       drops.push(new Drop(this.x + this.width / 2, this.y + this.height / 2, 'coin', 10));
@@ -170,12 +180,22 @@ export class Enemy {
         this.x += this.vx;
         this.y += this.vy;
 
-        // Reset to patrol if it hits the ground boundary or goes too far
-        if (this.y >= 460) {
-          this.y = 460;
-          this.state = 'patrol';
-          this.vx = this.facingRight ? this.speed : -this.speed;
-          this.vy = -3; // Fly back up
+        // Swoop down to ground-level height (Y = 420) and fly straight horizontally!
+        if (this.y >= 420) {
+          this.y = 420;
+          this.vy = 0;
+          if (this.vx === 0) {
+            this.vx = this.facingRight ? this.speed * 2 : -this.speed * 2;
+          }
+
+          // Reverse direction at patrol boundaries
+          if (this.x > this.patrolMaxX) {
+            this.vx = -Math.abs(this.vx);
+            this.facingRight = false;
+          } else if (this.x < this.patrolMinX) {
+            this.vx = Math.abs(this.vx);
+            this.facingRight = true;
+          }
         }
       }
       this.x += this.vx;
@@ -217,35 +237,41 @@ export class Enemy {
 
       this.x += this.vx;
 
-    } else if (this.type === 'lawnmower') {
-      // Lawnmower AI: Patrols fast, hits obstacle -> crashes and gets stunned
+    } else if (this.type === 'inspector') {
+      // Inspector AI: Patrols back and forth, occasionally stopping to write/throw a citation ticket
       if (this.state === 'patrol') {
-        // Move forward
+        if (this.vx === 0) this.vx = this.facingRight ? this.speed : -this.speed;
         this.x += this.vx;
 
-        // Check if hit any obstacle in level
-        for (const p of platforms) {
-          if (p.type === 'obstacle' || (p.type === 'box' && !p.broken)) {
-            const hitLeft = this.x + this.width >= p.x && this.x + this.width <= p.x + 10;
-            const hitRight = this.x <= p.x + p.w && this.x >= p.x + p.w - 10;
-            const checkY = this.y + this.height > p.y && this.y < p.y + p.h;
+        // Turn around at patrol boundaries
+        if (this.x > this.patrolMaxX) {
+          this.vx = -this.speed;
+          this.facingRight = false;
+        } else if (this.x < this.patrolMinX) {
+          this.vx = this.speed;
+          this.facingRight = true;
+        }
 
-            if (checkY && (hitLeft || hitRight)) {
-              // CRASH!
-              this.state = 'crash_stun';
-              this.vx = 0;
-              this.stunTimer = this.lawnmowerStunDuration;
-              break;
-            }
-          }
+        // Check if player is close to pause and throw a ticket
+        const distToPlayer = Math.abs(playerX - this.x);
+        if (distToPlayer < 250 && Math.abs(playerY - this.y) < 50 && Math.random() < 0.015) {
+          this.state = 'chase'; // Pause to write a citation
+          this.bossStateTimer = 45; // 45 frames pause
+          this.vx = 0;
+          this.facingRight = playerX > this.x; // Face the player
+        }
+      } else if (this.state === 'chase') {
+        // Stop and write violation notice
+        this.bossStateTimer--;
+        if (this.bossStateTimer <= 0) {
+          this.state = 'patrol';
+          this.vx = this.facingRight ? this.speed : -this.speed;
         }
       } else if (this.state === 'crash_stun') {
-        // Stunned on crash
-        this.stunTimer--;
-        if (this.stunTimer <= 0) {
+        // Guard-broken stun state (reuses bossStateTimer)
+        this.bossStateTimer--;
+        if (this.bossStateTimer <= 0) {
           this.state = 'patrol';
-          // Reverse direction
-          this.facingRight = !this.facingRight;
           this.vx = this.facingRight ? this.speed : -this.speed;
         }
       }
@@ -276,13 +302,13 @@ export class Enemy {
       if (this.bossPhase === 'charge') {
         // Charge back and forth
         this.x += this.vx;
-        // Keep in arena limits around the gate (2500 - 3080)
-        if (this.x < 2400) {
-          this.x = 2400;
+        // Keep in arena limits around the gate (3050 - 3450)
+        if (this.x < 3050) {
+          this.x = 3050;
           this.vx = -this.vx;
           this.facingRight = true;
-        } else if (this.x > 3050) {
-          this.x = 3050;
+        } else if (this.x > 3450) {
+          this.x = 3450;
           this.vx = -this.vx;
           this.facingRight = false;
         }
@@ -311,8 +337,8 @@ export class Enemy {
       this.drawPigeon(ctx, tick);
     } else if (this.type === 'dog') {
       this.drawDog(ctx, tick);
-    } else if (this.type === 'lawnmower') {
-      this.drawLawnmower(ctx, tick);
+    } else if (this.type === 'inspector') {
+      this.drawInspector(ctx, tick);
     } else if (this.type === 'officer_bob') {
       this.drawOfficerBob(ctx, tick);
     }
@@ -442,7 +468,7 @@ export class Enemy {
     ctx.fillStyle = originalFillStyle;
   }
 
-  private drawLawnmower(ctx: CanvasRenderingContext2D, tick: number) {
+  private drawInspector(ctx: CanvasRenderingContext2D, tick: number) {
     ctx.save();
     ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
     if (!this.facingRight) ctx.scale(-1, 1);
@@ -451,15 +477,15 @@ export class Enemy {
     for (const [ox, oy] of outlineOffsets) {
       ctx.save();
       ctx.translate(ox, oy);
-      this.drawLawnmowerShape(ctx, tick, true);
+      this.drawInspectorShape(ctx, tick, true);
       ctx.restore();
     }
 
-    this.drawLawnmowerShape(ctx, tick, false);
+    this.drawInspectorShape(ctx, tick, false);
     ctx.restore();
   }
 
-  private drawLawnmowerShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
+  private drawInspectorShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
     const originalFillStyle = ctx.fillStyle;
     const setColor = (color: string) => {
       ctx.fillStyle = isOutline ? '#0f172a' : color;
@@ -469,38 +495,62 @@ export class Enemy {
     const shakeX = isStunned ? Math.floor((Math.random() - 0.5) * 4) : 0;
     const shakeY = isStunned ? Math.floor((Math.random() - 0.5) * 4) : 0;
 
-    // Sparks (blocky, skip on outline)
-    if (!isOutline && isStunned && tick % 8 === 0) {
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(shakeX - 12, -22 + shakeY, 4, 4);
-      ctx.fillRect(shakeX + 8, -18 + shakeY, 3, 3);
+    // Body / Legs (standing pants)
+    setColor('#1e293b'); // Dark pants
+    ctx.fillRect(-8 + shakeX, 10 + shakeY, 16, 20);
+
+    // Shoes
+    setColor('#0f172a');
+    ctx.fillRect(-10 + shakeX, 26 + shakeY, 6, 4);
+    ctx.fillRect(4 + shakeX, 26 + shakeY, 6, 4);
+
+    // Torso (Light blue shirt + Neon HOA vest)
+    setColor('#38bdf8'); // Sky blue shirt
+    ctx.fillRect(-10 + shakeX, -15 + shakeY, 20, 25);
+    
+    // Neon Orange/Yellow Vest on top
+    setColor('#f97316'); // Neon orange vest
+    ctx.fillRect(-10 + shakeX, -15 + shakeY, 5, 25);
+    ctx.fillRect(5 + shakeX, -15 + shakeY, 5, 25);
+    ctx.fillRect(-5 + shakeX, 5 + shakeY, 10, 5);
+
+    // Head
+    setColor('#ffedd5'); // Skin tone
+    ctx.fillRect(-7 + shakeX, -29 + shakeY, 14, 14);
+
+    // Hair/Glasses
+    setColor('#78350f'); // Brown hair
+    ctx.fillRect(-8 + shakeX, -31 + shakeY, 16, 4);
+    setColor('#475569'); // Glasses
+    ctx.fillRect(1 + shakeX, -25 + shakeY, 6, 3);
+
+    // Clipboard Shield (The central guard item)
+    // If stunned, clipboard is lowered/tilted
+    ctx.save();
+    if (isStunned) {
+      ctx.translate(5 + shakeX, 5 + shakeY);
+      ctx.rotate(0.6); // tilted down
+      
+      setColor('#ca8a04'); // Cardboard brown clipboard
+      ctx.fillRect(0, -10, 8, 14);
+      setColor('#94a3b8'); // Metal clip
+      ctx.fillRect(2, -12, 4, 3);
+    } else {
+      // Waving hand/clipboard in front of body to block attacks
+      const wave = Math.sin(tick * 0.1) * 2;
+      setColor('#ca8a04'); // Cardboard brown clipboard
+      ctx.fillRect(5 + shakeX, -10 + shakeY + wave, 8, 18);
+      setColor('#94a3b8'); // Metal clip
+      ctx.fillRect(7 + shakeX, -13 + shakeY + wave, 4, 4);
     }
+    ctx.restore();
 
-    // Main red body
-    setColor(isStunned ? '#b91c1c' : '#ef4444');
-    ctx.fillRect(-20 + shakeX, -10 + shakeY, 40, 16);
-
-    // Shading
-    setColor(isStunned ? '#7f1d1d' : '#991b1b');
-    ctx.fillRect(-20 + shakeX, 2 + shakeY, 40, 4);
-
-    // Wheels (square wheels!)
-    setColor('#1e293b');
-    ctx.fillRect(-16 + shakeX, 4 + shakeY, 8, 8);
-    ctx.fillRect(8 + shakeX, 4 + shakeY, 8, 8);
-
-    setColor('#cbd5e1'); // hubs
-    ctx.fillRect(-14 + shakeX, 6 + shakeY, 4, 4);
-    ctx.fillRect(10 + shakeX, 6 + shakeY, 4, 4);
-
-    // Engine top block
-    setColor('#334155');
-    ctx.fillRect(-10 + shakeX, -18 + shakeY, 20, 8);
-
-    // Handle (blocky line)
-    setColor('#64748b');
-    ctx.fillRect(-24 + shakeX, -18 + shakeY, 8, 3);
-    ctx.fillRect(-30 + shakeX, -24 + shakeY, 8, 3);
+    // Dizziness stars/sparks if stunned
+    if (!isOutline && isStunned && tick % 8 === 0) {
+      ctx.fillStyle = '#fde047'; // Yellow sparkles
+      ctx.fillRect(shakeX - 10, -38 + shakeY, 3, 3);
+      ctx.fillRect(shakeX + 8, -35 + shakeY, 2, 2);
+    }
 
     ctx.fillStyle = originalFillStyle;
   }
