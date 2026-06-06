@@ -33,12 +33,15 @@ export class Enemy {
   bossStateTimer: number = 0;
   bossPhase: 'charge' | 'shoot' | 'idle' = 'idle';
 
+  groundY: number = 480;
+
   constructor(x: number, y: number, type: EnemyType, patrolWidth: number = 200) {
     this.x = x;
     this.y = y;
     this.type = type;
     this.vx = 0;
     this.vy = 0;
+    this.groundY = 480;
 
     this.patrolMinX = x - patrolWidth / 2;
     this.patrolMaxX = x + patrolWidth / 2;
@@ -131,6 +134,25 @@ export class Enemy {
   update(playerX: number, playerY: number, platforms: Platform[], tick: number) {
     if (this.state === 'dead') return;
 
+    // Find ground Y under enemy
+    let underY = 480;
+    for (const p of platforms) {
+      if (
+        p.type === 'ground' ||
+        p.type === 'obstacle' ||
+        (p.type === 'trashcan' && !p.broken) ||
+        (p.type === 'box' && !p.broken) ||
+        (p.type === 'gate' && !p.broken)
+      ) {
+        if (this.x + this.width > p.x && this.x < p.x + p.w) {
+          if (p.y >= this.y + this.height - 4 && p.y < underY) {
+            underY = p.y;
+          }
+        }
+      }
+    }
+    this.groundY = underY;
+
     // Flash timer tick
     if (this.flashTimer > 0) this.flashTimer--;
 
@@ -150,12 +172,14 @@ export class Enemy {
 
     // AI Logic by Type
     if (this.type === 'pigeon') {
-      // Pigeon AI: Hover and dive when player is close
+      // Ground-charging Pigeon AI: hover 35px above current ground
+      this.y = (this.groundY - 35) + Math.sin(tick * 0.15) * 4;
+      this.vy = 0;
+
       if (this.state === 'patrol') {
-        this.vy = Math.sin(tick * 0.08) * 0.5; // Slight hover drift
+        if (this.vx === 0) this.vx = this.facingRight ? this.speed : -this.speed;
         
-        // Patrol back and forth
-        if (this.vx === 0) this.vx = this.speed;
+        // Simple back and forth patrol
         if (this.x > this.patrolMaxX) {
           this.vx = -this.speed;
           this.facingRight = false;
@@ -164,46 +188,22 @@ export class Enemy {
           this.facingRight = true;
         }
 
-        // Dive trigger
-        if (distToPlayer < 200 && playerY > this.y && Math.random() < 0.02) {
-          this.state = 'chase'; // Dive state
-          // Calculate dive vector
-          const dx = playerX - this.x;
-          const dy = playerY - this.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          this.vx = (dx / dist) * 5;
-          this.vy = (dy / dist) * 5;
-          this.facingRight = this.vx > 0;
+        // Trigger horizontal charge
+        if (distToPlayer < 220) {
+          this.state = 'chase';
         }
       } else if (this.state === 'chase') {
-        // Diving physics
-        this.x += this.vx;
-        this.y += this.vy;
+        // Charge horizontally at player
+        this.vx = playerX > this.x ? this.speed * 2.5 : -this.speed * 2.5;
+        this.facingRight = this.vx > 0;
 
-        // Swoop down to ground-level height (Y = 420) and fly straight horizontally!
-        if (this.y >= 420) {
-          this.y = 420;
-          this.vy = 0;
-          if (this.vx === 0) {
-            this.vx = this.facingRight ? this.speed * 2 : -this.speed * 2;
-          }
-
-          // Reverse direction at patrol boundaries
-          if (this.x > this.patrolMaxX) {
-            this.vx = -Math.abs(this.vx);
-            this.facingRight = false;
-          } else if (this.x < this.patrolMinX) {
-            this.vx = Math.abs(this.vx);
-            this.facingRight = true;
-          }
+        // Lose interest if too far
+        if (distToPlayer > 300) {
+          this.state = 'patrol';
+          this.vx = this.facingRight ? this.speed : -this.speed;
         }
       }
       this.x += this.vx;
-      this.y += this.vy;
-
-      // Keep height bound
-      if (this.y < 150) this.y = 150;
-      if (this.y > 470) this.y = 470;
 
     } else if (this.type === 'dog') {
       // Dog AI: Patrols, chases if player is nearby, barks
@@ -322,6 +322,27 @@ export class Enemy {
   draw(ctx: CanvasRenderingContext2D, cameraX: number, tick: number) {
     if (this.state === 'dead') return;
 
+    // --- Draw Ground Shadow ---
+    ctx.save();
+    ctx.translate(this.x + this.width / 2 - cameraX, this.groundY);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    const heightDiff = Math.max(0, this.groundY - (this.y + this.height));
+    const shadowScale = Math.max(0.3, 1 - heightDiff / 250);
+    const shadowWidth = Math.floor(this.width * 1.1 * shadowScale);
+    const shadowHeight = Math.floor(8 * shadowScale);
+    const sx = -Math.floor(shadowWidth / 2);
+    const sy = -Math.floor(shadowHeight / 2);
+    
+    // Snap to 4px
+    const snap = 4;
+    const snapX = Math.floor(sx / snap) * snap;
+    const snapY = Math.floor(sy / snap) * snap;
+    const snapW = Math.ceil(shadowWidth / snap) * snap;
+    const snapH = Math.ceil(shadowHeight / snap) * snap;
+    ctx.fillRect(snapX, snapY, snapW, snapH);
+    ctx.fillRect(snapX + snap, snapY - snap, snapW - 2 * snap, snapH + 2 * snap);
+    ctx.restore();
+
     ctx.save();
     ctx.translate(-cameraX, 0);
 
@@ -365,38 +386,50 @@ export class Enemy {
 
   private drawPigeonShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
     const originalFillStyle = ctx.fillStyle;
+    const gridSize = 4;
     const setColor = (color: string) => {
       ctx.fillStyle = isOutline ? '#0f172a' : color;
     };
+    const drawRect = (color: string, rx: number, ry: number, rw: number, rh: number) => {
+      setColor(color);
+      const x = Math.floor(rx / gridSize) * gridSize;
+      const y = Math.floor(ry / gridSize) * gridSize;
+      const w = Math.ceil(rw / gridSize) * gridSize;
+      const h = Math.ceil(rh / gridSize) * gridSize;
+      ctx.fillRect(x, y, w, h);
+    };
 
-    // Body (slate gray block)
-    setColor('#64748b');
-    ctx.fillRect(-12, -8, 22, 15);
+    // Body
+    drawRect('#64748b', -12, -8, 22, 15);
+    drawRect('#1e293b', -12, 3, 22, 4); // Deeper slate shading on belly
 
-    // Dark shading
-    setColor('#475569');
-    ctx.fillRect(-12, 3, 22, 4);
+    // Iridescent Neck (gritty city pigeon style!)
+    drawRect('#14b8a6', 0, -10, 8, 6); // Teal neck sheen
+    drawRect('#8b5cf6', 2, -7, 6, 4); // Purple neck sheen
 
-    // Head (dark blue-gray block)
-    setColor('#475569');
-    ctx.fillRect(6, -14, 10, 10);
+    // Head
+    drawRect('#475569', 4, -14, 12, 10);
+    drawRect('#64748b', 6, -14, 8, 3); // head highlight
 
-    // Beak (yellow rect)
-    setColor('#fbbf24');
-    ctx.fillRect(16, -11, 4, 3);
+    // Beak
+    drawRect('#fbbf24', 16, -11, 4, 3);
 
-    // Eye (pixel-art white/black dot)
+    // Eye
     if (!isOutline) {
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(11, -12, 2, 2);
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(12, -12, 1, 1);
+      ctx.fillRect(11, -11, 2, 2);
+      ctx.fillStyle = '#ef4444'; // Angry red pupil!
+      ctx.fillRect(12, -11, 1, 1);
     }
 
-    // Wing (animating up and down using a block)
-    const wingOffset = Math.sin(tick * 0.45) > 0 ? -2 : 2;
-    setColor('#334155');
-    ctx.fillRect(-6, -6 + wingOffset, 10, 8);
+    // Wings (Animates flapping)
+    const wingOffset = Math.sin(tick * 0.45) > 0 ? -3 : 3;
+    drawRect('#334155', -8, -5 + wingOffset, 12, 8); // Wing base
+    drawRect('#1e293b', -6, -2 + wingOffset, 8, 3); // Wing shadow/feather stripe
+
+    // Claws
+    drawRect('#f97316', -8, 7, 3, 4);
+    drawRect('#f97316', 2, 7, 3, 4);
 
     ctx.fillStyle = originalFillStyle;
   }
@@ -420,50 +453,72 @@ export class Enemy {
 
   private drawDogShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
     const originalFillStyle = ctx.fillStyle;
+    const gridSize = 4;
     const setColor = (color: string) => {
       ctx.fillStyle = isOutline ? '#0f172a' : color;
+    };
+    const drawRect = (color: string, rx: number, ry: number, rw: number, rh: number) => {
+      setColor(color);
+      const x = Math.floor(rx / gridSize) * gridSize;
+      const y = Math.floor(ry / gridSize) * gridSize;
+      const w = Math.ceil(rw / gridSize) * gridSize;
+      const h = Math.ceil(rh / gridSize) * gridSize;
+      ctx.fillRect(x, y, w, h);
     };
 
     const isRunning = this.state === 'chase';
     const bob = isRunning ? Math.floor(Math.sin(tick * 0.45) * 2) : 0;
 
-    // Tail (blocky wagging)
-    setColor('#854d0e');
+    // Tail (blocky brawler tail wag)
     const tailYOffset = isRunning && Math.floor(tick / 5) % 2 === 0 ? -6 : -2;
-    ctx.fillRect(-18, -8 + bob + tailYOffset, 4, 6);
+    drawRect('#78350f', -18, -8 + bob + tailYOffset, 4, 8);
+    drawRect('#a16207', -17, -6 + bob + tailYOffset, 2, 4);
 
-    // Body (brown dog block)
-    setColor('#a16207'); // Medium brown
-    ctx.fillRect(-14, -10 + bob, 26, 18);
+    // Body
+    drawRect('#a16207', -14, -10 + bob, 26, 18);
+    drawRect('#451a03', -14, 2 + bob, 26, 6); // Deeper dark brown shadow on belly
+    drawRect('#d97706', -12, -10 + bob, 20, 3); // back highlight
 
-    // Legs (blocky swing)
-    setColor('#78350f'); // Dark brown legs
-    if (isRunning) {
-      const step = Math.floor(tick / 6) % 2;
-      ctx.fillRect(-10, 8 + bob, 4, step === 0 ? 8 : 4);
-      ctx.fillRect(4, 8 + bob, 4, step === 1 ? 8 : 4);
-    } else {
-      ctx.fillRect(-10, 8 + bob, 4, 8);
-      ctx.fillRect(4, 8 + bob, 4, 8);
+    // Spike Collar (gritty street dog!)
+    drawRect('#475569', 5, -12 + bob, 4, 14);
+    if (!isOutline) {
+      ctx.fillStyle = '#ffffff'; // White spikes
+      ctx.fillRect(6, -10 + bob, 2, 2);
+      ctx.fillRect(6, -2 + bob, 2, 2);
     }
 
+    // Legs (swings when running)
+    const step = Math.floor(tick / 6) % 2;
+    const leg1H = isRunning ? (step === 0 ? 8 : 4) : 8;
+    const leg2H = isRunning ? (step === 1 ? 8 : 4) : 8;
+
+    drawRect('#78350f', -10, 8 + bob, 4, leg1H); // Rear back leg
+    drawRect('#a16207', -8, 8 + bob, 3, leg1H - 1);
+    drawRect('#78350f', 4, 8 + bob, 4, leg2H); // Front leg
+    drawRect('#a16207', 6, 8 + bob, 3, leg2H - 1);
+
     // Head
-    setColor('#a16207');
-    ctx.fillRect(8, -18 + bob, 12, 12);
+    drawRect('#a16207', 8, -18 + bob, 12, 12);
+    drawRect('#d97706', 10, -18 + bob, 8, 3); // Head top highlight
 
     // Glowing red eye for stray dog
     if (!isOutline) {
       ctx.fillStyle = '#ef4444';
       ctx.fillRect(15, -14 + bob, 2, 2);
+      ctx.fillStyle = '#ffffff'; // glare
+      ctx.fillRect(16, -14 + bob, 1, 1);
     }
 
-    // Snout
-    setColor('#78350f');
-    ctx.fillRect(18, -12 + bob, 6, 6);
+    // Snout / Jaws (fierce bulldog underbite)
+    drawRect('#78350f', 18, -12 + bob, 6, 6);
+    drawRect('#451a03', 19, -8 + bob, 5, 2); // open growling mouth line
+    if (!isOutline) {
+      ctx.fillStyle = '#ffffff'; // white fang
+      ctx.fillRect(21, -9 + bob, 1, 1);
+    }
 
-    // Ear (floppy dark block)
-    setColor('#451a03');
-    ctx.fillRect(6, -18 + bob, 4, 8);
+    // Ears (folded dark ears)
+    drawRect('#451a03', 6, -19 + bob, 4, 8);
 
     ctx.fillStyle = originalFillStyle;
   }
@@ -487,61 +542,98 @@ export class Enemy {
 
   private drawInspectorShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
     const originalFillStyle = ctx.fillStyle;
+    const gridSize = 4;
     const setColor = (color: string) => {
       ctx.fillStyle = isOutline ? '#0f172a' : color;
+    };
+    const drawRect = (color: string, rx: number, ry: number, rw: number, rh: number) => {
+      setColor(color);
+      const x = Math.floor(rx / gridSize) * gridSize;
+      const y = Math.floor(ry / gridSize) * gridSize;
+      const w = Math.ceil(rw / gridSize) * gridSize;
+      const h = Math.ceil(rh / gridSize) * gridSize;
+      ctx.fillRect(x, y, w, h);
     };
 
     const isStunned = this.state === 'crash_stun';
     const shakeX = isStunned ? Math.floor((Math.random() - 0.5) * 4) : 0;
     const shakeY = isStunned ? Math.floor((Math.random() - 0.5) * 4) : 0;
 
-    // Body / Legs (standing pants)
-    setColor('#1e293b'); // Dark pants
-    ctx.fillRect(-8 + shakeX, 10 + shakeY, 16, 20);
+    // Body / Legs (standing suit pants with crease shading)
+    drawRect('#0f172a', -8 + shakeX, 10 + shakeY, 16, 20); // Darker suit base
+    drawRect('#020617', -2 + shakeX, 10 + shakeY, 2, 20); // Near-black crease shadow
 
-    // Shoes
-    setColor('#0f172a');
-    ctx.fillRect(-10 + shakeX, 26 + shakeY, 6, 4);
-    ctx.fillRect(4 + shakeX, 26 + shakeY, 6, 4);
+    // Shaded Combat Shoes
+    drawRect('#020617', -11 + shakeX, 26 + shakeY, 7, 4);
+    drawRect('#1e293b', -11 + shakeX, 26 + shakeY, 7, 1); // toe highlight
+    drawRect('#020617', 4 + shakeX, 26 + shakeY, 7, 4);
+    drawRect('#1e293b', 4 + shakeX, 26 + shakeY, 7, 1);
 
-    // Torso (Light blue shirt + Neon HOA vest)
-    setColor('#38bdf8'); // Sky blue shirt
-    ctx.fillRect(-10 + shakeX, -15 + shakeY, 20, 25);
+    // Torso (Light blue dress shirt + Neon HOA vest with reflective stripes)
+    drawRect('#0284c7', -10 + shakeX, -15 + shakeY, 20, 25); // Richer sky blue shirt
+    drawRect('#0369a1', -10 + shakeX, 0 + shakeY, 20, 10); // Shirt shadow under vest
     
-    // Neon Orange/Yellow Vest on top
-    setColor('#f97316'); // Neon orange vest
-    ctx.fillRect(-10 + shakeX, -15 + shakeY, 5, 25);
-    ctx.fillRect(5 + shakeX, -15 + shakeY, 5, 25);
-    ctx.fillRect(-5 + shakeX, 5 + shakeY, 10, 5);
+    // Neon Orange Vest
+    drawRect('#ea580c', -10 + shakeX, -15 + shakeY, 5, 25);
+    drawRect('#ea580c', 5 + shakeX, -15 + shakeY, 5, 25);
+    drawRect('#ea580c', -5 + shakeX, 5 + shakeY, 10, 5);
+
+    // Reflective Lime-Green Stripes
+    drawRect('#84cc16', -9 + shakeX, -8 + shakeY, 3, 3);
+    drawRect('#84cc16', 6 + shakeX, -8 + shakeY, 3, 3);
+    drawRect('#84cc16', -5 + shakeX, 6 + shakeY, 10, 2);
 
     // Head
-    setColor('#ffedd5'); // Skin tone
-    ctx.fillRect(-7 + shakeX, -29 + shakeY, 14, 14);
+    drawRect('#ffedd5', -7 + shakeX, -29 + shakeY, 14, 14);
+    drawRect('#ffcc99', -7 + shakeX, -19 + shakeY, 14, 4); // chin shadow
 
-    // Hair/Glasses
-    setColor('#78350f'); // Brown hair
-    ctx.fillRect(-8 + shakeX, -31 + shakeY, 16, 4);
-    setColor('#475569'); // Glasses
-    ctx.fillRect(1 + shakeX, -25 + shakeY, 6, 3);
+    // Hair / Glasses
+    drawRect('#78350f', -8 + shakeX, -32 + shakeY, 16, 5); // Brown hair
+    drawRect('#451a03', -8 + shakeX, -32 + shakeY, 3, 7); // sideburns shadow
+    
+    // Angry sunglasses
+    drawRect('#000000', 0 + shakeX, -26 + shakeY, 7, 4);
+    if (!isOutline) {
+      ctx.fillStyle = '#fbbf24'; // Golden glass reflection
+      ctx.fillRect(4 + shakeX, -25 + shakeY, 2, 2);
+    }
 
     // Clipboard Shield (The central guard item)
-    // If stunned, clipboard is lowered/tilted
     ctx.save();
     if (isStunned) {
       ctx.translate(5 + shakeX, 5 + shakeY);
       ctx.rotate(0.6); // tilted down
       
-      setColor('#ca8a04'); // Cardboard brown clipboard
-      ctx.fillRect(0, -10, 8, 14);
-      setColor('#94a3b8'); // Metal clip
-      ctx.fillRect(2, -12, 4, 3);
+      // Clipboard wooden board
+      drawRect('#a16207', 0, -10, 10, 16);
+      drawRect('#78350f', 8, -10, 2, 16); // shadow
+      
+      // Violation citation paper on clip
+      drawRect('#f8fafc', 2, -6, 6, 11);
+      if (!isOutline) {
+        ctx.fillStyle = '#ef4444'; // Red stamp
+        ctx.fillRect(3, 0, 4, 3);
+      }
+
+      // Metal clip
+      drawRect('#94a3b8', 3, -12, 4, 3);
     } else {
       // Waving hand/clipboard in front of body to block attacks
       const wave = Math.sin(tick * 0.1) * 2;
-      setColor('#ca8a04'); // Cardboard brown clipboard
-      ctx.fillRect(5 + shakeX, -10 + shakeY + wave, 8, 18);
-      setColor('#94a3b8'); // Metal clip
-      ctx.fillRect(7 + shakeX, -13 + shakeY + wave, 4, 4);
+      
+      // Clipboard wooden board
+      drawRect('#a16207', 5 + shakeX, -10 + shakeY + wave, 10, 20);
+      drawRect('#78350f', 13 + shakeX, -10 + shakeY + wave, 2, 20); // shadow
+      
+      // Citation paper
+      drawRect('#f8fafc', 7 + shakeX, -6 + shakeY + wave, 6, 14);
+      if (!isOutline) {
+        ctx.fillStyle = '#ef4444'; // Red stamp
+        ctx.fillRect(8 + shakeX, 2 + shakeY + wave, 4, 3);
+      }
+
+      // Metal clip
+      drawRect('#94a3b8', 8 + shakeX, -13 + shakeY + wave, 4, 4);
     }
     ctx.restore();
 
@@ -574,69 +666,89 @@ export class Enemy {
 
   private drawOfficerBobShape(ctx: CanvasRenderingContext2D, tick: number, isOutline: boolean) {
     const originalFillStyle = ctx.fillStyle;
+    const gridSize = 4;
     const setColor = (color: string) => {
       ctx.fillStyle = isOutline ? '#0f172a' : color;
     };
+    const drawRect = (color: string, rx: number, ry: number, rw: number, rh: number) => {
+      setColor(color);
+      const x = Math.floor(rx / gridSize) * gridSize;
+      const y = Math.floor(ry / gridSize) * gridSize;
+      const w = Math.ceil(rw / gridSize) * gridSize;
+      const h = Math.ceil(rh / gridSize) * gridSize;
+      ctx.fillRect(x, y, w, h);
+    };
 
-    // Segway base wheel (blocky ellipse)
-    setColor('#1e293b');
-    ctx.fillRect(-20, 26, 40, 10);
-    setColor('#475569');
-    ctx.fillRect(-12, 28, 24, 6);
+    // 1. Segway base wheel & mudguard
+    drawRect('#020617', -22, 24, 44, 12); // Big tire outline
+    drawRect('#475569', -14, 27, 28, 6); // Metallic rim
+    drawRect('#0f172a', -6, 29, 12, 2); // Hubcap
 
-    // Segway post/handlebars (blocky)
-    setColor('#475569');
-    ctx.fillRect(6, -10, 4, 40);
+    // Mudguard
+    drawRect('#334155', -24, 18, 48, 6);
+    drawRect('#0f172a', -24, 20, 48, 4); // Mudguard shadow
 
-    // Officer body (Blue uniform)
-    setColor('#1e3a8a');
-    ctx.fillRect(-10, -25, 20, 35);
+    // Segway post/steering column
+    drawRect('#334155', 8, -15, 5, 36);
+    drawRect('#0f172a', 8, -15, 2, 36); // column shadow
+    drawRect('#020617', 4, -18, 12, 4); // handlebars base
+
+    // 2. Officer body (Deep blue uniform)
+    drawRect('#172554', -12, -26, 24, 44); // Torso
+    drawRect('#0f172a', -12, -26, 5, 44); // back shadow
     
-    // Yellow buttons/badge
+    // Gold Epaulets on shoulders
+    drawRect('#eab308', -13, -27, 6, 3);
+    drawRect('#eab308', 7, -27, 6, 3);
+
+    // Officer buttons/badge
     if (!isOutline) {
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(-2, -18, 3, 3);
-      ctx.fillRect(-2, -10, 3, 3);
+      ctx.fillStyle = '#fbbf24'; // Gold star badge
+      ctx.fillRect(-4, -18, 4, 4);
+      ctx.fillStyle = '#eab308'; // Buttons
+      ctx.fillRect(-2, -10, 2, 2);
+      ctx.fillRect(-2, -2, 2, 2);
     }
 
-    // Officer arms
-    setColor('#172554');
-    ctx.fillRect(-2, -22, 12, 6);
+    // Officer arms (Holding handlebars)
+    drawRect('#172554', -2, -22, 14, 8); // Arm sleeve
+    drawRect('#f8fafc', 8, -20, 6, 6); // White police gloves!
 
-    // Officer Head
-    setColor('#ffedd5');
-    ctx.fillRect(-7, -39, 14, 14);
+    // 3. Officer Head
+    drawRect('#ffedd5', -8, -40, 16, 15);
+    drawRect('#ffcc99', -8, -29, 16, 4); // chin shadow
 
-    // Sunglasses (pixel-art shades)
-    setColor('#000000');
-    ctx.fillRect(0, -35, 8, 4);
+    // Sunglasses (Aviator shades)
+    drawRect('#000000', 0, -36, 9, 5);
     if (!isOutline) {
-      // Golden bridge on glasses
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(3, -35, 2, 2);
+      ctx.fillStyle = '#fbbf24'; // Gold rim bridge
+      ctx.fillRect(3, -36, 3, 2);
+      ctx.fillStyle = '#ffffff'; // glare dot
+      ctx.fillRect(6, -34, 1, 1);
     }
 
-    // mustache block
-    setColor('#451a03');
-    ctx.fillRect(0, -30, 6, 2);
+    // Chevron Mustache
+    drawRect('#451a03', 0, -31, 8, 3);
 
     // Police Cap
-    setColor('#172554');
-    ctx.fillRect(-9, -43, 18, 5);
-    setColor('#fbbf24'); // gold badge
-    ctx.fillRect(4, -42, 3, 3);
+    drawRect('#172554', -10, -44, 20, 5); // cap base
+    drawRect('#0f172a', -2, -41, 13, 2); // visor rim
+    drawRect('#fbbf24', 4, -43, 3, 3); // gold cap badge
 
-    // Flashing siren light on Segway (orange/red/blue block)
+    // 4. Flashing siren light on Segway mudguard (orange/red/blue block)
     const flashColor = Math.floor(tick / 5) % 2 === 0 ? '#3b82f6' : '#ef4444';
-    setColor(flashColor);
-    ctx.fillRect(-12, -14, 8, 8);
+    drawRect(flashColor, -16, 10, 10, 8);
+    drawRect('#ffffff', -14, 10, 6, 2); // siren inner glow
 
-    // Siren beam lines (drawn as small square particles, skip on outline)
+    // Siren beam lines (translucent shapes, skip on outline)
     if (!isOutline) {
-      ctx.fillStyle = flashColor;
-      ctx.fillRect(-20, -20, 3, 3);
-      ctx.fillRect(-24, -16, 3, 3);
-      ctx.fillRect(-20, -8, 3, 3);
+      ctx.fillStyle = flashColor === '#3b82f6' ? 'rgba(59, 130, 246, 0.25)' : 'rgba(239, 68, 68, 0.25)';
+      ctx.beginPath();
+      ctx.moveTo(-11, 14);
+      ctx.lineTo(-45, -10);
+      ctx.lineTo(-45, 30);
+      ctx.closePath();
+      ctx.fill();
     }
 
     ctx.fillStyle = originalFillStyle;

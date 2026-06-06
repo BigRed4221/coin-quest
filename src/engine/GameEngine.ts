@@ -54,7 +54,7 @@ export class GameEngine {
   private cutsceneSlideDuration: number = 210; // 3.5 seconds at 60fps
   private cutsceneFadeDuration: number = 30;  // 0.5 seconds at 60fps
   private cameraX: number = 0;
-  private maxCameraX: number = 2640; // 3600 level width - 960 canvas width
+  private maxCameraX: number = 3120; // 3600 level width - 480 zoomed viewport width
 
   // Entities
   private player: Player;
@@ -101,15 +101,6 @@ export class GameEngine {
 
   // Tutorial screen elements
   private tutorialOverlay: HTMLElement | null = null;
-  private tutorialTitle: HTMLElement | null = null;
-  private tutorialText: HTMLElement | null = null;
-  private triggeredTutorials: { [key: string]: boolean } = {
-    movement: false,
-    crouch: false,
-    attack: false,
-    inspector: false,
-    campfire: false
-  };
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -135,8 +126,6 @@ export class GameEngine {
     this.gameOverScreen = document.getElementById('game-over-screen');
     this.victoryScreen = document.getElementById('victory-screen');
     this.tutorialOverlay = document.getElementById('tutorial-overlay');
-    this.tutorialTitle = document.getElementById('tutorial-title');
-    this.tutorialText = document.getElementById('tutorial-text');
 
     const closeBtn = document.getElementById('tutorial-close-btn');
     closeBtn?.addEventListener('click', () => {
@@ -225,7 +214,7 @@ export class GameEngine {
     // Spawn player at last checkpoint
     this.player.x = this.lastCheckpointX;
     this.player.y = 400;
-    this.cameraX = Math.max(0, Math.min(this.player.x - 200, this.maxCameraX));
+    this.cameraX = Math.max(0, Math.min(this.player.x - 240, this.maxCameraX));
 
     this.projectiles = [];
     this.particles = [];
@@ -241,8 +230,8 @@ export class GameEngine {
       new Enemy(1160, 450, 'dog', 0),
 
       // Group 2: Angry Pigeon swarm (X=1450 to 1510)
-      new Enemy(1450, 200, 'pigeon', 100),
-      new Enemy(1510, 240, 'pigeon', 100),
+      new Enemy(1450, 440, 'pigeon', 100),
+      new Enemy(1510, 440, 'pigeon', 100),
 
       // Group 3: HOA Inspector squad (X=2100 to 2380)
       new Enemy(2100, 420, 'inspector', 350),
@@ -250,84 +239,15 @@ export class GameEngine {
 
       // Group 4: Post-campfire ambush (X=2650 to 2850)
       new Enemy(2650, 450, 'dog', 150),
-      new Enemy(2700, 210, 'pigeon', 80),
-      new Enemy(2760, 240, 'pigeon', 80),
+      new Enemy(2700, 440, 'pigeon', 80),
+      new Enemy(2760, 440, 'pigeon', 80),
       new Enemy(2850, 420, 'inspector', 300)
     ];
 
-    // Re-initialize arenas
-    this.arenas = [
-      {
-        id: 'dogs',
-        triggerX: 1020,
-        leftBarrierX: 1000,
-        rightBarrierX: 1250,
-        isActive: false,
-        isCleared: false,
-        enemyIndices: [0, 1],
-        leftPlatform: null,
-        rightPlatform: null
-      },
-      {
-        id: 'pigeons',
-        triggerX: 1370,
-        leftBarrierX: 1350,
-        rightBarrierX: 1620,
-        isActive: false,
-        isCleared: false,
-        enemyIndices: [2, 3],
-        leftPlatform: null,
-        rightPlatform: null
-      },
-      {
-        id: 'inspectors',
-        triggerX: 2000,
-        leftBarrierX: 1950,
-        rightBarrierX: 2530,
-        isActive: false,
-        isCleared: false,
-        enemyIndices: [4, 5],
-        leftPlatform: null,
-        rightPlatform: null
-      },
-      {
-        id: 'ambush',
-        triggerX: 2600,
-        leftBarrierX: 2580,
-        rightBarrierX: 3000,
-        isActive: false,
-        isCleared: false,
-        enemyIndices: [6, 7, 8, 9],
-        leftPlatform: null,
-        rightPlatform: null
-      }
-    ];
+    // Re-initialize arenas (empty to remove forced movement blocks/laser barriers)
+    this.arenas = [];
 
-    // Handle checkpoint spawning
-    if (this.lastCheckpointX === this.level.campfireX) {
-      // Arenas 1 and 2 are cleared automatically if starting from campfire
-      this.arenas[0].isCleared = true;
-      this.arenas[1].isCleared = true;
 
-      // Mark the associated enemies as dead so they don't appear frozen on screen
-      this.arenas[0].enemyIndices.forEach(idx => {
-        if (this.enemies[idx]) this.enemies[idx].state = 'dead';
-      });
-      this.arenas[1].enemyIndices.forEach(idx => {
-        if (this.enemies[idx]) this.enemies[idx].state = 'dead';
-      });
-    }
-
-    // Reset tutorial triggers if starting a fresh run from porch
-    if (this.lastCheckpointX === 100) {
-      this.triggeredTutorials = {
-        movement: false,
-        crouch: false,
-        attack: false,
-        inspector: false,
-        campfire: false
-      };
-    }
 
     // If player has already beaten boss once or campfire used
     if (this.hasCampfireBeenUsed) {
@@ -354,15 +274,15 @@ export class GameEngine {
     this.populateCampfireSkills();
   }
 
-  private triggerTutorial(id: string, title: string, text: string) {
-    this.gameState = 'tutorial';
-    this.triggeredTutorials[id] = true;
-    
-    if (this.tutorialTitle) this.tutorialTitle.innerText = title;
-    if (this.tutorialText) this.tutorialText.innerHTML = text;
-    
-    this.tutorialOverlay?.classList.remove('hidden');
-  }
+  // private triggerTutorial(id: string, title: string, text: string) {
+  //   this.gameState = 'tutorial';
+  //   this.triggeredTutorials[id] = true;
+  //   
+  //   if (this.tutorialTitle) this.tutorialTitle.innerText = title;
+  //   if (this.tutorialText) this.tutorialText.innerHTML = text;
+  //   
+  //   this.tutorialOverlay?.classList.remove('hidden');
+  // }
 
   private resumeFromTutorial() {
     this.gameState = 'playing';
@@ -761,7 +681,7 @@ export class GameEngine {
       }
 
       // Out of bounds cleanup
-      if (p.x < this.cameraX - 100 || p.x > this.cameraX + 1060 || p.y > 540) {
+      if (p.x < this.cameraX - 100 || p.x > this.cameraX + 580 || p.y > 540) {
         this.projectiles.splice(i, 1);
       }
     }
@@ -972,7 +892,7 @@ export class GameEngine {
     } else if (px >= 1000 && px < 1300) {
       this.tutorialPrompt.textContent = 'Defeat the Stray Dogs to drop the laser barriers!';
     } else if (px >= 1300 && px < 1700) {
-      this.tutorialPrompt.textContent = 'Jump or crouch under diving pigeons!';
+      this.tutorialPrompt.textContent = 'Jump over low-charging pigeons or punch them!';
     } else if (px >= 1700 && px < 1950) {
       this.tutorialPrompt.textContent = 'Stand near campfire. Press R to rest & equip skills!';
     } else if (px >= 1950 && px < 2580) {
@@ -1045,6 +965,25 @@ export class GameEngine {
 
       this.player.update(this.level.platforms);
 
+      // Spawn floating gold skill particles if the player has active gold skills
+      if (this.player.goldSkillEffectTimer > 0) {
+        const pCount = Math.random() < 0.4 ? 2 : 1;
+        for (let i = 0; i < pCount; i++) {
+          const px = this.player.x + Math.random() * this.player.width;
+          const py = this.player.y + (this.player.isCrouching ? this.player.height / 2 : this.player.height) - 5;
+          this.particles.push({
+            x: px,
+            y: py,
+            vx: (Math.random() - 0.5) * 1.6,
+            vy: -Math.random() * 2 - 1.5, // rising speed
+            color: Math.random() < 0.6 ? '#ffd700' : '#fbbf24',
+            size: Math.random() * 2 + 2,
+            life: 0,
+            maxLife: 15 + Math.random() * 15
+          });
+        }
+      }
+
       // Update Combat Arenas
       for (const arena of this.arenas) {
         // Trigger arena activation
@@ -1085,38 +1024,7 @@ export class GameEngine {
         }
       }
 
-      // Check tutorial checkpoints
-      if (this.player.x >= 250 && !this.triggeredTutorials.movement) {
-        this.triggerTutorial(
-          'movement',
-          'Movement & Crouching',
-          'Carl, it\'s time to escape Grandma\'s suburbs! Use <strong>A / D</strong> to Walk, and hold <strong>W</strong> to Jump over picket fences. When you reach the low tree branch overhang, press <strong>S</strong> to Crouch under it safely!'
-        );
-      } else if (this.player.x >= 820 && !this.triggeredTutorials.attack) {
-        this.triggerTutorial(
-          'attack',
-          'Attack Combo Tutorial',
-          'A heavy metal trash can blocks the sidewalk! Click <strong>Left Mouse</strong> or press <strong>J</strong> to attack. Press it consecutively to perform a <strong>Punch-Punch-Kick combo</strong>. Only the third hit (Roundhouse Kick) is strong enough to smash the trash can!'
-        );
-      } else if (this.player.x >= 1320 && !this.triggeredTutorials.crouch) {
-        this.triggerTutorial(
-          'crouch',
-          'Diving Pigeons Tutorial',
-          'Heads up! Angry pigeons dive-bomb from above and fly straight at you. Press <strong>W</strong> to jump over them, or press <strong>S</strong> to crouch and let them fly right over you!'
-        );
-      } else if (this.player.x >= 1750 && !this.triggeredTutorials.campfire) {
-        this.triggerTutorial(
-          'campfire',
-          'Rest Campfire Tutorial',
-          'Checkpoint reached! Stand next to the campfire and press <strong>R</strong> to rest, save your progress, fully heal, and equip active skills like the <strong>Coin Slide</strong>!'
-        );
-      } else if (this.player.x >= 2000 && !this.triggeredTutorials.inspector) {
-        this.triggerTutorial(
-          'inspector',
-          'HOA Inspector Tutorial',
-          'HOA Inspectors block all front attacks with their clipboards! Perform a <strong>Punch-Punch-Kick combo</strong> (J-J-J) and hit them with the <strong>Roundhouse Kick</strong> to break their guard, or jump behind them to hit their vulnerable back!'
-        );
-      }
+      // Inline tutorial dialog popups have been replaced by the intro cutscene tutorial slideshow.
 
       // Check skill flags
       if (this.player.coinTossTriggered) {
@@ -1139,7 +1047,7 @@ export class GameEngine {
       // 2. Camera tracking player (horizontal scroll)
       if (!this.isCameraLockedForBoss) {
         // Center player on screen
-        const targetCamX = this.player.x - 400;
+        const targetCamX = this.player.x - 240;
         this.cameraX += (targetCamX - this.cameraX) * 0.1;
         this.cameraX = Math.max(0, Math.min(this.cameraX, this.maxCameraX));
       }
@@ -1220,6 +1128,13 @@ export class GameEngine {
       return;
     }
 
+    this.ctx.save();
+    
+    // Scale context by 2x for retro pixelation and zoom
+    this.ctx.scale(2, 2);
+    // Shift context Y so that we view the bottom 270 pixels of the 540-height level coordinates
+    this.ctx.translate(0, -270);
+
     // 1. Draw level layers (parallax backgrounds)
     this.level.drawBackground(this.ctx, this.cameraX);
 
@@ -1232,16 +1147,48 @@ export class GameEngine {
     // 3. Draw physical drops (coins & XP gems)
     this.drops.forEach(d => d.draw(this.ctx, this.cameraX));
 
-    // 4. Draw projectiles (citations, thrown coins)
+    // 4. Draw projectiles (citations, thrown coins) in blocky retro pixel style
     this.projectiles.forEach(p => {
       this.ctx.save();
-      this.ctx.translate(-this.cameraX, 0);
-      this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-      this.ctx.fillStyle = p.color;
-      this.ctx.shadowBlur = 8;
-      this.ctx.shadowColor = p.color;
-      this.ctx.fill();
+      this.ctx.translate(p.x - this.cameraX, p.y);
+
+      if (p.type === 'cointoss') {
+        // Spin the coin blockily
+        const angle = (this.tick * 0.2) % (Math.PI * 2);
+        this.ctx.rotate(angle);
+        
+        // Outline silhouette
+        this.ctx.fillStyle = '#000000';
+        this.ctx.fillRect(-7, -7, 14, 14);
+        
+        // Gold Coin octagon body
+        this.ctx.fillStyle = '#ffd700';
+        this.ctx.fillRect(-6, -4, 12, 8);
+        this.ctx.fillRect(-4, -6, 8, 12);
+        
+        // Inner shading
+        this.ctx.fillStyle = '#fbbf24';
+        this.ctx.fillRect(-3, -3, 6, 6);
+        this.ctx.fillStyle = '#d97706'; // center dot
+        this.ctx.fillRect(-1, -1, 2, 2);
+      } else {
+        // Citation paper card
+        const angle = (this.tick * 0.1) % (Math.PI * 2);
+        this.ctx.rotate(angle);
+
+        // Outline
+        this.ctx.fillStyle = '#000000';
+        this.ctx.fillRect(-6, -8, 12, 16);
+
+        // White paper card base
+        this.ctx.fillStyle = '#f8fafc';
+        this.ctx.fillRect(-5, -7, 10, 14);
+
+        // Red citation stamp / warning lines
+        this.ctx.fillStyle = '#ef4444';
+        this.ctx.fillRect(-3, -4, 6, 2);
+        this.ctx.fillRect(-3, 1, 6, 2);
+      }
       this.ctx.restore();
     });
 
@@ -1269,6 +1216,8 @@ export class GameEngine {
       this.ctx.font = '8px "Press Start 2P"';
       this.ctx.fillText('Press R to sit', this.level.campfireX - 52 - this.cameraX, 376);
     }
+
+    this.ctx.restore();
   }
 
   private spawnBarrierActivationEffect(x: number) {
@@ -1322,40 +1271,26 @@ export class GameEngine {
 
     const wallYStart = 100;
     const wallYEnd = 480;
-    const wallWidth = 12;
-
-    // Laser beam vertical gradient
-    const gradient = ctx.createLinearGradient(x - wallWidth, 0, x + wallWidth, 0);
-    const alpha = 0.4 + Math.sin(this.tick * 0.15) * 0.15;
-    gradient.addColorStop(0, 'rgba(239, 68, 68, 0)');
-    gradient.addColorStop(0.5, `rgba(239, 68, 68, ${alpha})`);
-    gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(x - wallWidth, wallYStart, wallWidth * 2, wallYEnd - wallYStart);
-
-    // Bright core line
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x, wallYStart);
-    ctx.lineTo(x, wallYEnd);
-    ctx.stroke();
-
-    // Side glow lines
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.7)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x - 3, wallYStart);
-    ctx.lineTo(x - 3, wallYEnd);
-    ctx.moveTo(x + 3, wallYStart);
-    ctx.lineTo(x + 3, wallYEnd);
-    ctx.stroke();
-
-    // Laser cross-pulses sliding down
-    ctx.fillStyle = 'rgba(254, 202, 202, 0.85)';
-    const scanlineY = wallYStart + ((this.tick * 3.5) % (wallYEnd - wallYStart));
-    ctx.fillRect(x - 8, scanlineY, 16, 4);
+    const blockWidth = 14;
+    const blockHeight = 16;
+    
+    // Draw stacked warning segments (chunky pixel lights)
+    const scroll = Math.floor(this.tick * 0.15) % 2;
+    for (let y = wallYStart; y < wallYEnd; y += blockHeight) {
+      const isRed = ((Math.floor(y / blockHeight) + scroll) % 2 === 0);
+      
+      // Outline
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(x - blockWidth / 2 - 2, y, blockWidth + 4, blockHeight);
+      
+      // Neon warning block
+      ctx.fillStyle = isRed ? '#ef4444' : '#ffffff';
+      ctx.fillRect(x - blockWidth / 2, y + 2, blockWidth, blockHeight - 4);
+      
+      // Core highlight block
+      ctx.fillStyle = isRed ? '#fca5a5' : '#e2e8f0';
+      ctx.fillRect(x - blockWidth / 2 + 3, y + 4, blockWidth - 6, blockHeight - 8);
+    }
 
     // Draw warning text above player height
     if (Math.floor(this.tick / 20) % 2 === 0) {
@@ -1389,7 +1324,7 @@ export class GameEngine {
       this.cutsceneFadeAlpha = this.cutsceneTimer / this.cutsceneFadeDuration;
       if (this.cutsceneTimer >= this.cutsceneFadeDuration) {
         this.cutsceneSlideIndex++;
-        if (this.cutsceneSlideIndex >= 5) {
+        if (this.cutsceneSlideIndex >= 9) {
           this.skipCutscene();
         } else {
           this.cutsceneFadeState = 'fadeIn';
@@ -1432,6 +1367,18 @@ export class GameEngine {
         break;
       case 4:
         this.drawSlide5();
+        break;
+      case 5:
+        this.drawSlide6();
+        break;
+      case 6:
+        this.drawSlide7();
+        break;
+      case 7:
+        this.drawSlide8();
+        break;
+      case 8:
+        this.drawSlide9();
         break;
     }
 
@@ -1477,6 +1424,18 @@ export class GameEngine {
         break;
       case 4:
         text = "With no choice left, Carl runs to buy back the house!";
+        break;
+      case 5:
+        text = "CONTROLS: Press A/D to Walk left/right. Press W to Jump over fences.";
+        break;
+      case 6:
+        text = "COMBAT: Click/J to attack. Chain J-J-J for Punch-Punch-Kick combo. Press S to Crouch.";
+        break;
+      case 7:
+        text = "CAMPFIRE: Stand near Campfires and press R to rest, fully heal, and equip skills.";
+        break;
+      case 8:
+        text = "Let the Quest begin! Retrieve $1,432,980 to buy back Grandma's home...";
         break;
     }
 
@@ -1826,44 +1785,83 @@ export class GameEngine {
     const runFrame = Math.floor(this.tick / 4) % 4;
     const bob = runFrame % 2 === 0 ? 0 : -4;
 
-    this.ctx.fillStyle = '#0284c7';
+    this.ctx.fillStyle = '#78350f'; // Brown leather satchel
     if (runFrame === 0 || runFrame === 2) {
       this.ctx.fillRect(carlX - 10, carlY + 15, 10, 15);
     } else {
       this.ctx.fillRect(carlX + 22, carlY + 15, 10, 15);
     }
 
-    this.ctx.fillStyle = '#1e293b';
+    this.ctx.fillStyle = '#df9a66'; // Bare skin shins
     if (runFrame === 0) {
-      this.ctx.fillRect(carlX + 2, carlY + 36, 8, 16);
-      this.ctx.fillRect(carlX + 16, carlY + 36, 12, 10);
+      this.ctx.fillRect(carlX + 2, carlY + 36, 8, 12);
+      this.ctx.fillRect(carlX + 16, carlY + 36, 12, 6);
+      this.ctx.fillStyle = '#78350f'; // Sandal soles
+      this.ctx.fillRect(carlX + 2, carlY + 48, 8, 4);
+      this.ctx.fillRect(carlX + 16, carlY + 42, 12, 4);
     } else if (runFrame === 1) {
-      this.ctx.fillRect(carlX - 4, carlY + 36, 12, 10);
-      this.ctx.fillRect(carlX + 12, carlY + 36, 8, 20);
-    } else if (runFrame === 2) {
+      this.ctx.fillRect(carlX - 4, carlY + 36, 12, 6);
       this.ctx.fillRect(carlX + 12, carlY + 36, 8, 16);
-      this.ctx.fillRect(carlX - 2, carlY + 36, 12, 10);
+      this.ctx.fillStyle = '#78350f'; // Sandal soles
+      this.ctx.fillRect(carlX - 4, carlY + 42, 12, 4);
+      this.ctx.fillRect(carlX + 12, carlY + 52, 8, 4);
+    } else if (runFrame === 2) {
+      this.ctx.fillRect(carlX + 12, carlY + 36, 8, 12);
+      this.ctx.fillRect(carlX - 2, carlY + 36, 12, 6);
+      this.ctx.fillStyle = '#78350f'; // Sandal soles
+      this.ctx.fillRect(carlX + 12, carlY + 48, 8, 4);
+      this.ctx.fillRect(carlX - 2, carlY + 42, 12, 4);
     } else {
-      this.ctx.fillRect(carlX + 14, carlY + 36, 12, 10);
-      this.ctx.fillRect(carlX + 2, carlY + 36, 8, 20);
+      this.ctx.fillRect(carlX + 14, carlY + 36, 12, 6);
+      this.ctx.fillRect(carlX + 2, carlY + 36, 8, 16);
+      this.ctx.fillStyle = '#78350f'; // Sandal soles
+      this.ctx.fillRect(carlX + 14, carlY + 42, 12, 4);
+      this.ctx.fillRect(carlX + 2, carlY + 52, 8, 4);
     }
 
-    this.ctx.fillStyle = '#38bdf8';
-    this.ctx.fillRect(carlX + 2, carlY + 12 + bob, 22, 25);
+    // Shorts
+    this.ctx.fillStyle = '#d2b48c';
+    this.ctx.fillRect(carlX + 2, carlY + 28 + bob, 22, 9);
 
-    this.ctx.fillStyle = '#38bdf8';
+    // Torso Shirt
+    this.ctx.fillStyle = '#dc2626';
+    this.ctx.fillRect(carlX + 2, carlY + 12 + bob, 22, 16);
+    
+    // Flowers
+    this.ctx.fillStyle = '#fde047';
+    this.ctx.fillRect(carlX + 6, carlY + 16 + bob, 4, 4);
+    this.ctx.fillRect(carlX + 14, carlY + 22 + bob, 4, 4);
+
+    // Short sleeves & bare skin arms
+    this.ctx.fillStyle = '#dc2626'; // shirt red sleeve
     if (runFrame === 0 || runFrame === 2) {
-      this.ctx.fillRect(carlX + 20, carlY + 15 + bob, 12, 10);
+      this.ctx.fillRect(carlX + 20, carlY + 15 + bob, 6, 10);
+      this.ctx.fillStyle = '#df9a66'; // bare skin forearm
+      this.ctx.fillRect(carlX + 26, carlY + 15 + bob, 6, 10);
     } else {
-      this.ctx.fillRect(carlX - 8, carlY + 15 + bob, 12, 10);
+      this.ctx.fillRect(carlX - 2, carlY + 15 + bob, 6, 10);
+      this.ctx.fillStyle = '#df9a66'; // bare skin forearm
+      this.ctx.fillRect(carlX - 8, carlY + 15 + bob, 6, 10);
     }
 
-    this.ctx.fillStyle = '#ffedd5';
+    // Head skin
+    this.ctx.fillStyle = '#df9a66';
     this.ctx.fillRect(carlX + 6, carlY - 4 + bob, 16, 16);
-    this.ctx.fillStyle = '#475569';
-    this.ctx.fillRect(carlX + 14, carlY + bob, 8, 4);
-    this.ctx.fillStyle = '#78350f';
+    
+    // Sunglasses
+    this.ctx.fillStyle = '#111111';
+    this.ctx.fillRect(carlX + 12, carlY + bob, 10, 4);
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillRect(carlX + 18, carlY + bob, 4, 4);
+
+    // Hair
+    this.ctx.fillStyle = '#0f172a';
     this.ctx.fillRect(carlX + 4, carlY - 8 + bob, 18, 5);
+    
+    // Red headband
+    this.ctx.fillStyle = '#b91c1c';
+    this.ctx.fillRect(carlX + 4, carlY - 4 + bob, 18, 3);
+    this.ctx.fillRect(carlX - 2, carlY - 3 + bob, 6, 2); // tail flying back
 
     const noteY = Math.min(410, 240 + Math.floor(progress * 280));
     const noteX = 300 - Math.floor(progress * 100);
@@ -1915,5 +1913,511 @@ export class GameEngine {
     this.ctx.fillText('DEBT DUE:', magnX + magnW / 2, magnY + 65);
     this.ctx.fillStyle = '#15803d';
     this.ctx.fillText('$1,432,980', magnX + magnW / 2, magnY + 78);
+  }
+
+  private drawCarlCutscene(cx: number, cy: number, pose: 'stand' | 'kick' | 'crouch' = 'stand') {
+    this.ctx.save();
+    this.ctx.translate(cx, cy);
+
+    // Outline
+    this.ctx.fillStyle = '#000000';
+    if (pose === 'stand') {
+      this.ctx.fillRect(-24, -96, 48, 96);
+    } else if (pose === 'crouch') {
+      this.ctx.fillRect(-24, -48, 48, 48);
+    } else {
+      this.ctx.fillRect(-32, -96, 96, 96);
+    }
+
+    // Color layers
+    const colorShirt = '#dc2626';
+    const colorShirtFlowers = '#fde047';
+    const colorShorts = '#d2b48c';
+    const colorSkin = '#df9a66';
+    const colorBelt = '#78350f';
+    const colorBeltHighlight = '#ffd700';
+    const colorHair = '#0f172a';
+    const colorWraps = '#b91c1c';
+    const colorHeadband = '#b91c1c';
+    const colorSandalSole = '#78350f';
+    const colorSandalStrap = '#451a03';
+    const colorSunglasses = '#111111';
+
+    if (pose === 'stand') {
+      // Shorts
+      this.ctx.fillStyle = colorShorts;
+      this.ctx.fillRect(-20, -32, 40, 14);
+      // Bare skin shins
+      this.ctx.fillStyle = colorSkin;
+      this.ctx.fillRect(-18, -18, 36, 14);
+      // Sandal straps
+      this.ctx.fillStyle = colorSandalStrap;
+      this.ctx.fillRect(-16, -6, 12, 2);
+      this.ctx.fillRect(4, -6, 12, 2);
+      // Sandal soles
+      this.ctx.fillStyle = colorSandalSole;
+      this.ctx.fillRect(-18, -4, 14, 4);
+      this.ctx.fillRect(4, -4, 14, 4);
+
+      // Torso shirt
+      this.ctx.fillStyle = colorShirt;
+      this.ctx.fillRect(-20, -72, 40, 40);
+      
+      // Flowers print
+      this.ctx.fillStyle = colorShirtFlowers;
+      this.ctx.fillRect(-14, -64, 6, 6);
+      this.ctx.fillRect(6, -56, 6, 6);
+      this.ctx.fillRect(-10, -46, 6, 6);
+
+      // Skin Chest V-Neck
+      this.ctx.fillStyle = colorSkin;
+      this.ctx.fillRect(-6, -72, 12, 16);
+      
+      // Belt
+      this.ctx.fillStyle = colorBelt;
+      this.ctx.fillRect(-22, -36, 44, 8);
+      this.ctx.fillStyle = colorBeltHighlight;
+      this.ctx.fillRect(-4, -36, 8, 8);
+
+      // Head
+      this.ctx.fillStyle = colorSkin;
+      this.ctx.fillRect(-12, -92, 24, 20);
+      
+      // Sunglasses
+      this.ctx.fillStyle = colorSunglasses;
+      this.ctx.fillRect(-2, -86, 14, 6);
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillRect(6, -86, 4, 6);
+
+      // Hair
+      this.ctx.fillStyle = colorHair;
+      this.ctx.fillRect(-14, -98, 28, 8);
+      
+      // Headband
+      this.ctx.fillStyle = colorHeadband;
+      this.ctx.fillRect(-14, -92, 28, 6);
+
+      // Wraps/Hands
+      this.ctx.fillStyle = colorWraps;
+      this.ctx.fillRect(16, -56, 12, 12);
+    } else if (pose === 'crouch') {
+      // Crouched
+      // Hawaiian shirt
+      this.ctx.fillStyle = colorShirt;
+      this.ctx.fillRect(-20, -38, 40, 18);
+      
+      // Flowers
+      this.ctx.fillStyle = colorShirtFlowers;
+      this.ctx.fillRect(-10, -34, 4, 4);
+      this.ctx.fillRect(6, -32, 4, 4);
+
+      // Shorts
+      this.ctx.fillStyle = colorShorts;
+      this.ctx.fillRect(-20, -38, 40, 6);
+
+      // Bare shins
+      this.ctx.fillStyle = colorSkin;
+      this.ctx.fillRect(-20, -20, 40, 16);
+      
+      // Sandal soles
+      this.ctx.fillStyle = colorSandalSole;
+      this.ctx.fillRect(-22, -4, 44, 4);
+
+      // Belt
+      this.ctx.fillStyle = colorBelt;
+      this.ctx.fillRect(-22, -22, 44, 4);
+      this.ctx.fillStyle = colorBeltHighlight;
+      this.ctx.fillRect(-4, -22, 8, 4);
+
+      // Head
+      this.ctx.fillStyle = colorSkin;
+      this.ctx.fillRect(-10, -48, 20, 12);
+      
+      // Sunglasses
+      this.ctx.fillStyle = colorSunglasses;
+      this.ctx.fillRect(0, -44, 10, 4);
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillRect(6, -44, 4, 4);
+
+      // Hair
+      this.ctx.fillStyle = colorHair;
+      this.ctx.fillRect(-12, -54, 24, 6);
+      
+      // Headband
+      this.ctx.fillStyle = colorHeadband;
+      this.ctx.fillRect(-12, -48, 24, 3);
+    } else if (pose === 'kick') {
+      // Extended kick
+      // Left standing leg shorts & bare skin
+      this.ctx.fillStyle = colorShorts;
+      this.ctx.fillRect(-20, -32, 24, 14);
+      this.ctx.fillStyle = colorSkin;
+      this.ctx.fillRect(-18, -18, 20, 14);
+      this.ctx.fillStyle = colorSandalSole;
+      this.ctx.fillRect(-20, -4, 24, 4);
+
+      // Torso shirt
+      this.ctx.fillStyle = colorShirt;
+      this.ctx.fillRect(-10, -72, 40, 40);
+      
+      // Flowers
+      this.ctx.fillStyle = colorShirtFlowers;
+      this.ctx.fillRect(-4, -64, 6, 6);
+      this.ctx.fillRect(16, -56, 6, 6);
+
+      // Extended leg (shorts + bare leg + sandal sole)
+      this.ctx.fillStyle = colorShorts;
+      this.ctx.fillRect(30, -32, 16, 12);
+      this.ctx.fillStyle = colorSkin;
+      this.ctx.fillRect(46, -32, 24, 12);
+      this.ctx.fillStyle = colorWraps;
+      this.ctx.fillRect(70, -32, 10, 12); // Foot
+      this.ctx.fillStyle = colorSandalSole;
+      this.ctx.fillRect(80, -32, 4, 12);
+
+      // Head
+      this.ctx.fillStyle = colorSkin;
+      this.ctx.fillRect(0, -92, 24, 20);
+      
+      // Sunglasses
+      this.ctx.fillStyle = colorSunglasses;
+      this.ctx.fillRect(10, -86, 14, 6);
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillRect(18, -86, 4, 6);
+
+      // Hair
+      this.ctx.fillStyle = colorHair;
+      this.ctx.fillRect(-2, -98, 28, 8);
+      
+      // Belt
+      this.ctx.fillStyle = colorBelt;
+      this.ctx.fillRect(-12, -36, 40, 8);
+    }
+
+    this.ctx.restore();
+  }
+
+  private drawSlide6() {
+    this.ctx.fillStyle = '#60a5fa'; // Sky
+    this.ctx.fillRect(0, 0, 960, 420);
+    this.ctx.fillStyle = '#474954'; // Street sidewalk
+    this.ctx.fillRect(0, 420, 960, 120);
+
+    // Draw keyboard prompt boxes for A, D, W
+    this.ctx.fillStyle = '#0f172a';
+    this.ctx.fillRect(160, 80, 80, 80); // A Key
+    this.ctx.fillRect(280, 80, 80, 80); // D Key
+    this.ctx.fillRect(440, 80, 80, 80); // W Key
+
+    this.ctx.strokeStyle = '#ffffff';
+    this.ctx.lineWidth = 4;
+    this.ctx.strokeRect(160, 80, 80, 80);
+    this.ctx.strokeRect(280, 80, 80, 80);
+    this.ctx.strokeRect(440, 80, 80, 80);
+
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = '24px "Press Start 2P"';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('A', 200, 130);
+    this.ctx.fillText('D', 320, 130);
+    this.ctx.fillText('W', 480, 130);
+
+    this.ctx.font = '9px "Press Start 2P"';
+    this.ctx.fillText('WALK LEFT', 200, 190);
+    this.ctx.fillText('WALK RIGHT', 320, 190);
+    this.ctx.fillText('JUMP', 480, 190);
+
+    // Draw Carl Quest in the center-right, walking/jumping
+    const carlX = 700;
+    const carlY = 320 + Math.floor(Math.sin(this.tick * 0.15) * 6);
+    this.drawCarlCutscene(carlX, carlY);
+  }
+
+  private drawSlide7() {
+    this.ctx.fillStyle = '#60a5fa'; // Sky
+    this.ctx.fillRect(0, 0, 960, 420);
+    this.ctx.fillStyle = '#474954'; // Sidewalk
+    this.ctx.fillRect(0, 420, 960, 120);
+
+    // Prompt keys
+    this.ctx.fillStyle = '#0f172a';
+    this.ctx.fillRect(160, 80, 80, 80); // S Key
+    this.ctx.fillRect(280, 80, 80, 80); // J Key
+
+    this.ctx.strokeStyle = '#ffffff';
+    this.ctx.lineWidth = 4;
+    this.ctx.strokeRect(160, 80, 80, 80);
+    this.ctx.strokeRect(280, 80, 80, 80);
+
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = '24px "Press Start 2P"';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('S', 200, 130);
+    this.ctx.fillText('J', 320, 130);
+
+    this.ctx.font = '9px "Press Start 2P"';
+    this.ctx.fillText('CROUCH', 200, 190);
+    this.ctx.fillText('ATTACK/COMBO', 320, 190);
+
+    // Left Carl: crouching under a leaf overhang
+    this.ctx.fillStyle = '#047857';
+    this.ctx.fillRect(450, 180, 140, 60); // leaf overhang
+    this.drawCarlCutscene(520, 380, 'crouch');
+
+    // Right Carl: roundhouse kicking a box
+    this.drawCarlCutscene(720, 320, 'kick');
+    // Cardboard crate box
+    this.ctx.fillStyle = '#ca8a04';
+    this.ctx.fillRect(800, 280, 50, 50);
+    this.ctx.strokeStyle = '#000000';
+    this.ctx.lineWidth = 3;
+    this.ctx.strokeRect(800, 280, 50, 50);
+  }
+
+  private drawSlide8() {
+    this.ctx.fillStyle = '#1e1b4b'; // Night sky
+    this.ctx.fillRect(0, 0, 960, 420);
+    this.ctx.fillStyle = '#334155'; // Dark sidewalk
+    this.ctx.fillRect(0, 420, 960, 120);
+
+    // Prompt keys
+    this.ctx.fillStyle = '#0f172a';
+    this.ctx.fillRect(100, 80, 80, 80); // R Key
+    this.ctx.fillRect(220, 80, 80, 80); // E Key
+    this.ctx.fillRect(340, 80, 80, 80); // F Key
+
+    this.ctx.strokeStyle = '#ffffff';
+    this.ctx.lineWidth = 4;
+    this.ctx.strokeRect(100, 80, 80, 80);
+    this.ctx.strokeRect(220, 80, 80, 80);
+    this.ctx.strokeRect(340, 80, 80, 80);
+
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = '24px "Press Start 2P"';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('R', 140, 130);
+    this.ctx.fillText('E', 260, 130);
+    this.ctx.fillText('F', 380, 130);
+
+    this.ctx.font = '9px "Press Start 2P"';
+    this.ctx.fillText('REST/CAMP', 140, 190);
+    this.ctx.fillText('SKILL 1', 260, 190);
+    this.ctx.fillText('SKILL 2', 380, 190);
+
+    // Campfire in the center-right
+    const campX = 680;
+    const campY = 420;
+    
+    // Stones base
+    this.ctx.fillStyle = '#475569';
+    this.ctx.fillRect(campX - 24, campY - 4, 48, 4);
+    // Logs
+    this.ctx.fillStyle = '#7c2d12';
+    this.ctx.fillRect(campX - 16, campY - 12, 32, 8);
+    // Flame
+    const flameH = 20 + Math.floor(Math.sin(this.tick * 0.4) * 6);
+    this.ctx.fillStyle = '#ef4444';
+    this.ctx.fillRect(campX - 10, campY - 12 - flameH, 20, flameH);
+    this.ctx.fillStyle = '#f97316';
+    this.ctx.fillRect(campX - 6, campY - 12 - Math.floor(flameH * 0.7), 12, Math.floor(flameH * 0.7));
+
+    // Carl sitting near campfire
+    this.drawCarlCutscene(campX - 80, campY, 'crouch');
+    
+    // Draw gold slide effect around Carl
+    this.ctx.fillStyle = 'rgba(251, 191, 36, 0.4)';
+    this.ctx.fillRect(campX - 140, campY - 30, 200, 3);
+  }
+
+  private drawSlide9() {
+    // Cinematic background sky (rich purple/pink gradient bands)
+    const skyColors = ['#0f172a', '#1e1b4b', '#311042', '#581c87', '#701a75', '#86198f', '#a21caf', '#c084fc', '#e9d5ff'];
+    const stripeH = 34; // 9 * 34 = 306
+    for (let i = 0; i < 9; i++) {
+      this.ctx.fillStyle = skyColors[i];
+      this.ctx.fillRect(0, i * stripeH, 960, stripeH);
+    }
+
+    // Giant glowing sunset sun in the horizon (blocky, pixelated)
+    this.ctx.fillStyle = '#eab308'; // orange sun outer
+    this.ctx.fillRect(380, 150, 200, 150);
+    this.ctx.fillRect(410, 120, 140, 210);
+    this.ctx.fillRect(450, 90, 60, 270);
+    
+    this.ctx.fillStyle = '#fbbf24'; // yellow sun mid
+    this.ctx.fillRect(400, 160, 160, 120);
+    this.ctx.fillRect(430, 130, 100, 180);
+    
+    this.ctx.fillStyle = '#ffffff'; // white sun core
+    this.ctx.fillRect(420, 170, 120, 90);
+    this.ctx.fillRect(440, 150, 80, 130);
+
+    // Skyscraper silhouette ruins on left & right
+    this.ctx.fillStyle = '#090d16'; // Deep silhouette
+    this.ctx.fillRect(40, 120, 140, 300);
+    this.ctx.fillRect(80, 80, 60, 340);
+    this.ctx.clearRect(100, 80, 15, 20); // crumbles
+    this.ctx.fillRect(180, 200, 100, 220);
+    
+    this.ctx.fillRect(680, 180, 100, 240);
+    this.ctx.fillRect(780, 100, 140, 320);
+    this.ctx.fillRect(820, 60, 60, 360);
+    this.ctx.clearRect(840, 60, 20, 15);
+
+    // Ground platform Y = 420
+    this.ctx.fillStyle = '#020617';
+    this.ctx.fillRect(0, 420, 960, 120);
+    this.ctx.fillStyle = '#1e293b';
+    this.ctx.fillRect(0, 420, 960, 8); // edge highlights
+
+    // Ground rubble concrete cracks
+    this.ctx.fillStyle = '#0f172a';
+    this.ctx.fillRect(200, 450, 80, 10);
+    this.ctx.fillRect(240, 460, 40, 8);
+    this.ctx.fillRect(600, 470, 120, 12);
+    this.ctx.fillRect(640, 482, 60, 6);
+
+    // Spawning beautiful animated golden sparks rising
+    this.ctx.fillStyle = '#fbbf24';
+    for (let i = 0; i < 20; i++) {
+      const sparkX = Math.floor((Math.sin(i * 9.7 + this.tick * 0.03) * 0.5 + 0.5) * 800) + 80;
+      const sparkY = (420 - (this.tick * (0.8 + (i % 3) * 0.4)) - (i * 25)) % 420;
+      const size = 4 + (i % 3) * 4; // chunky size
+      this.ctx.fillRect(sparkX, sparkY, size, size);
+      
+      // inner core
+      if (size > 4) {
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillRect(sparkX + 2, sparkY + 2, size - 4, size - 4);
+        this.ctx.fillStyle = '#fbbf24';
+      }
+    }
+
+    // Huge 2.5x detailed Carl Quest in martial arts stance in the center
+    this.ctx.save();
+    this.ctx.translate(480, 390);
+    this.ctx.scale(2.5, 2.5);
+    
+    const colorShirt = '#dc2626';
+    const colorShirtShade = '#991b1b';
+    const colorShirtFlowers = '#fde047';
+    const colorShorts = '#d2b48c';
+    const colorShortsShade = '#b59970';
+    const colorSkin = '#df9a66';
+    const colorBelt = '#78350f';
+    const colorBeltHighlight = '#ffd700';
+    const colorHair = '#0f172a';
+    const colorWraps = '#b91c1c';
+    const colorHeadband = '#b91c1c';
+    const colorSandalSole = '#78350f';
+    const colorSandalStrap = '#451a03';
+    const colorSunglasses = '#111111';
+
+    // Draw Carl Quest standing determined
+    // Outline
+    this.ctx.fillStyle = '#000000';
+    this.ctx.fillRect(-22, -92, 44, 92);
+    this.ctx.fillRect(-28, -72, 8, 30); // arm
+    this.ctx.fillRect(20, -72, 8, 30); // arm
+    
+    // Shorts
+    this.ctx.fillStyle = colorShorts;
+    this.ctx.fillRect(-18, -32, 16, 14); // left shorts
+    this.ctx.fillRect(2, -32, 16, 14); // right shorts
+    this.ctx.fillStyle = colorShortsShade;
+    this.ctx.fillRect(2, -32, 4, 14); // right shorts shaded border
+    
+    // Bare legs
+    this.ctx.fillStyle = colorSkin;
+    this.ctx.fillRect(-16, -18, 12, 14); // left bare shin
+    this.ctx.fillRect(4, -18, 12, 14); // right bare shin
+    
+    // Sandal straps
+    this.ctx.fillStyle = colorSandalStrap;
+    this.ctx.fillRect(-14, -6, 8, 2);
+    this.ctx.fillRect(6, -6, 8, 2);
+    
+    // Sandal soles (Feet)
+    this.ctx.fillStyle = colorSandalSole;
+    this.ctx.fillRect(-18, -4, 14, 4);
+    this.ctx.fillRect(4, -4, 14, 4);
+
+    // Torso shirt
+    this.ctx.fillStyle = colorShirt;
+    this.ctx.fillRect(-18, -68, 36, 36);
+    this.ctx.fillStyle = colorShirtShade;
+    this.ctx.fillRect(-18, -68, 8, 36);
+    
+    // Shirt flowers print
+    this.ctx.fillStyle = colorShirtFlowers;
+    this.ctx.fillRect(-8, -60, 6, 6);
+    this.ctx.fillRect(6, -52, 6, 6);
+    this.ctx.fillRect(-6, -44, 6, 6);
+
+    // V-neck skin
+    this.ctx.fillStyle = colorSkin;
+    this.ctx.fillRect(-4, -68, 8, 12);
+
+    // Brown leather belt with gold buckle
+    this.ctx.fillStyle = colorBelt;
+    this.ctx.fillRect(-20, -32, 40, 6);
+    this.ctx.fillStyle = colorBeltHighlight;
+    this.ctx.fillRect(-4, -32, 8, 6);
+
+    // Arms (short sleeve + bare forearm)
+    this.ctx.fillStyle = colorShirt;
+    this.ctx.fillRect(-26, -66, 8, 10); // left sleeve
+    this.ctx.fillRect(18, -66, 8, 10); // right sleeve
+    
+    this.ctx.fillStyle = colorSkin;
+    this.ctx.fillRect(-26, -56, 8, 8); // left bare arm
+    this.ctx.fillRect(18, -56, 8, 8); // right bare arm
+    
+    // Hands/Wraps
+    this.ctx.fillStyle = colorWraps;
+    this.ctx.fillRect(-28, -48, 10, 10);
+    this.ctx.fillRect(18, -48, 10, 10);
+
+    // Head
+    this.ctx.fillStyle = colorSkin;
+    this.ctx.fillRect(-12, -88, 24, 20);
+    
+    // Sunglasses
+    this.ctx.fillStyle = colorSunglasses;
+    this.ctx.fillRect(-2, -82, 16, 6);
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillRect(6, -82, 4, 6);
+    
+    // Hair
+    this.ctx.fillStyle = colorHair;
+    this.ctx.fillRect(-14, -94, 28, 6);
+    this.ctx.fillRect(-12, -96, 24, 2);
+    // Spikes blowing right
+    this.ctx.fillRect(-16, -92, 4, 8);
+    this.ctx.fillRect(-18, -88, 4, 8);
+
+    // Red Headband
+    this.ctx.fillStyle = colorHeadband;
+    this.ctx.fillRect(-12, -84, 24, 4);
+    this.ctx.fillRect(-16, -82, 4, 12); // sash flying left
+
+    this.ctx.restore();
+
+    // Widescreen black cinematic letterbox bars (top & bottom)
+    this.ctx.fillStyle = '#000000';
+    this.ctx.fillRect(0, 0, 960, 50);
+    this.ctx.fillRect(0, 490, 960, 50);
+
+    // Shiny flashing text in the center
+    const titleGlow = Math.floor(this.tick / 15) % 2 === 0;
+    this.ctx.font = '36px "Press Start 2P"';
+    this.ctx.textAlign = 'center';
+    
+    // Draw drop shadows
+    this.ctx.fillStyle = '#000000';
+    this.ctx.fillText('COIN QUEST', 480 + 4, 230 + 4);
+    
+    this.ctx.fillStyle = titleGlow ? '#ffd700' : '#fbbf24';
+    this.ctx.fillText('COIN QUEST', 480, 230);
   }
 }
