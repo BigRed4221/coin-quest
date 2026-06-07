@@ -52,7 +52,7 @@ export class Level {
   }
 
   // Draw background elements (parallax sky, ruined skyscrapers, street clouds)
-  drawBackground(ctx: CanvasRenderingContext2D, cameraX: number) {
+  drawBackground(ctx: CanvasRenderingContext2D, cameraX: number, cameraScale: number = 2.0) {
     // 1. Dithered/Banded Sky (Chunky horizontal color stripes)
     const skyColors = [
       '#232630', '#2a2d38', '#313440', '#383b48', 
@@ -60,10 +60,12 @@ export class Level {
       '#575258', '#5d5558', '#635957', '#665d56',
       '#665d56', '#5d5558', '#514f58'
     ];
-    const stripeHeight = 18;
+    const skyHeight = 540 / cameraScale;
+    const stripeHeight = skyHeight / 15;
+    const skyTop = 540 - skyHeight;
     for (let i = 0; i < 15; i++) {
       ctx.fillStyle = skyColors[i] || '#665d56';
-      ctx.fillRect(0, 270 + i * stripeHeight, 960, stripeHeight);
+      ctx.fillRect(0, skyTop + i * stripeHeight, 960, stripeHeight + 1);
     }
 
     // 2. Parallax Smog Clouds (Slow moving dark smoke)
