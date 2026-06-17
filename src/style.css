@@ -1,14 +1,14 @@
 :root {
-  --bg-color: #0b0c10;
-  --panel-bg: rgba(15, 23, 42, 0.7);
-  --panel-border: rgba(255, 255, 255, 0.08);
-  --text-color: #f1f5f9;
-  --text-muted: #94a3b8;
-  --primary-color: #ffd700; /* Gold */
-  --health-color: #ef4444; /* Bright red */
-  --money-color: #10b981; /* Emerald green */
-  --highlight-color: #06b6d4; /* Cyan */
-  --accent-color: #a855f7; /* Purple */
+  --bg-color: #f8fafc;
+  --panel-bg: rgba(255, 255, 255, 0.85);
+  --panel-border: rgba(0, 0, 0, 0.08);
+  --text-color: #0f172a;
+  --text-muted: #475569;
+  --primary-color: #fbbf24; /* Bright Gold */
+  --health-color: #fb7185; /* Soft bright red/pink */
+  --money-color: #34d399; /* Bright mint green */
+  --highlight-color: #38bdf8; /* Bright Cyan/Sky */
+  --accent-color: #c084fc; /* Bright Purple */
 }
 
 * {
@@ -34,7 +34,7 @@ body {
   width: 100vw;
   height: 100vh;
   position: relative;
-  background: radial-gradient(circle at center, #1e1e2f 0%, #0a0a0f 100%);
+  background: radial-gradient(circle at center, #e0f2fe 0%, #bae6fd 100%);
 }
 
 #game-container {
@@ -44,27 +44,25 @@ body {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
   border-radius: 12px;
   overflow: hidden;
-  border: 4px solid #2d2d3d;
-  background-color: #15151f;
+  border: 4px solid #7dd3fc;
+  background-color: #f0f9ff;
 }
 
 #game-canvas {
   display: block;
   width: 100%;
   height: 100%;
-  background: #111;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  background: #f8fafc;
 }
 
 /* Glassmorphism Panel styles - modified to retro 16-bit brawler frame */
 .glassmorphism {
-  background: #0f172a !important;
+  background: rgba(255, 255, 255, 0.9) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border: 4px solid var(--primary-color) !important;
+  border: 4px solid var(--highlight-color) !important;
   border-radius: 0px !important;
-  box-shadow: 0 0 0 4px #000000, 10px 10px 0px rgba(0, 0, 0, 0.6) !important;
+  box-shadow: 0 0 0 4px #e0f2fe, 10px 10px 0px rgba(0, 0, 0, 0.1) !important;
 }
 
 /* HUD Overlay Styles */
@@ -88,18 +86,18 @@ body {
 /* HUD Left: Player Profile and Stats */
 .hud-left {
   display: flex;
-  background: #0f172a;
+  background: rgba(255, 255, 255, 0.85);
   padding: 8px 16px;
   border-radius: 0;
-  border: 3px solid var(--primary-color);
-  box-shadow: 0 0 0 3px #000000;
+  border: 3px solid var(--highlight-color);
+  box-shadow: 0 0 0 3px #e0f2fe;
   align-items: center;
 }
 
 .profile-avatar {
   width: 44px;
   height: 44px;
-  background: #b91c1c;
+  background: var(--highlight-color);
   border-radius: 0;
   display: flex;
   justify-content: center;
@@ -107,9 +105,10 @@ body {
   margin-right: 12px;
   font-weight: 800;
   font-size: 0.8rem;
+  color: #fff;
   font-family: 'Press Start 2P', monospace;
-  border: 3px solid #000000;
-  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+  border: 3px solid #0284c7;
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.15);
 }
 
 .profile-stats {
@@ -135,10 +134,10 @@ body {
 .bar-container {
   width: 140px;
   height: 12px;
-  background: #1e293b;
+  background: #f1f5f9;
   border-radius: 0;
   overflow: hidden;
-  border: 2px solid #000000;
+  border: 2px solid #94a3b8;
 }
 
 .bar-fill {
@@ -159,10 +158,11 @@ body {
 
 /* HUD Center: Tutorial Prompt */
 .hud-center {
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(255, 255, 255, 0.85);
   border-radius: 8px;
   padding: 8px 16px;
-  border: 1px solid rgba(255, 215, 0, 0.2);
+  border: 1px solid var(--highlight-color);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
   pointer-events: none;
 }
 
@@ -186,11 +186,11 @@ body {
 .coin-display {
   display: flex;
   align-items: center;
-  background: #0f172a;
+  background: rgba(255, 255, 255, 0.85);
   padding: 6px 12px;
   border-radius: 0;
-  border: 3px solid var(--primary-color);
-  box-shadow: 0 0 0 3px #000000;
+  border: 3px solid var(--highlight-color);
+  box-shadow: 0 0 0 3px #e0f2fe;
 }
 
 .coin-icon {
@@ -225,10 +225,10 @@ body {
 .skill-slot {
   width: 48px;
   height: 48px;
-  background: #0f172a;
+  background: rgba(255, 255, 255, 0.85);
   border-radius: 0;
-  border: 3px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 0 0 2px #000000;
+  border: 3px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 0 0 2px #cbd5e1;
   position: relative;
   display: flex;
   justify-content: center;
@@ -290,7 +290,8 @@ body {
   justify-content: center;
   align-items: center;
   z-index: 100;
-  background: rgba(5, 5, 8, 0.6);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(4px);
   opacity: 1;
   transition: opacity 0.4s ease, visibility 0.4s;
 }
@@ -333,11 +334,12 @@ body {
 .story-crawl-container {
   height: 140px;
   overflow-y: auto;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 0.8);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.02);
   text-align: left;
 }
 
@@ -635,7 +637,7 @@ body {
   font-family: 'Press Start 2P', monospace;
   font-size: 0.65rem;
   line-height: 1.8;
-  color: #f1f5f9;
+  color: #0f172a;
   border-radius: 0;
   text-align: left;
 }
@@ -652,7 +654,7 @@ body {
 #tutorial-overlay #tutorial-text {
   font-size: 0.65rem;
   line-height: 1.8;
-  color: #cbd5e1;
+  color: #475569;
   margin-bottom: 20px;
   font-family: 'Press Start 2P', monospace;
 }

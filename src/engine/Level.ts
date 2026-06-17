@@ -3,7 +3,7 @@ export interface Platform {
   y: number;
   w: number;
   h: number;
-  type: 'ground' | 'obstacle' | 'box' | 'checkpoint' | 'gate' | 'overhang' | 'trashcan';
+  type: 'ground' | 'obstacle' | 'box' | 'checkpoint' | 'gate' | 'overhang' | 'house' | 'garbage_bag';
   broken?: boolean;
   isBarrier?: boolean;
 }
@@ -12,7 +12,8 @@ export class Level {
   width: number = 3600;
   height: number = 540;
   platforms: Platform[] = [];
-  campfireX: number = 1800;
+  tutorialTexts: { x: number, text: string }[] = [];
+  campfireX: number = 2000;
   bossTriggerX: number = 3100;
   endGateX: number = 3500;
   
@@ -22,27 +23,20 @@ export class Level {
 
   initLevel() {
     this.platforms = [];
+    this.tutorialTexts = [];
 
     // Main street sidewalk floor (runs the entire length of the level)
     this.platforms.push({ x: 0, y: 480, w: this.width, h: 60, type: 'ground' });
 
-    // --- Tutorial Obstacles ---
-    // Grandma's Picket Fence (Jump 1) at X = 400
-    this.platforms.push({ x: 400, y: 420, w: 20, h: 60, type: 'obstacle' });
-    
-    // Low tree branch overhang (Crouch Tutorial) at X = 600
-    this.platforms.push({ x: 600, y: 320, w: 80, h: 120, type: 'overhang' });
+    // --- Tutorial Section ---
+    // Floating text
+    this.tutorialTexts.push({ x: 150, text: 'Use A/D to move' });
+    this.tutorialTexts.push({ x: 320, text: 'SPACE to jump' });
 
-    // Breakable Trash Can (Combat Tutorial) at X = 950
-    this.platforms.push({ x: 950, y: 420, w: 40, h: 60, type: 'trashcan', broken: false });
-
-    // --- Midpoint Campfire Checkpoint ---
-    // Campfire sits at X: 1800.
+    // Wooden Fence (Jump 1)
+    this.platforms.push({ x: 400, y: 380, w: 20, h: 100, type: 'obstacle' });
     
-    // --- Post-Campfire Obstacles ---
-    // Fences and concrete walls
-    
-    // Raised wooden deck platforms
+    // --- Raised wooden deck platforms ---
     this.platforms.push({ x: 2350, y: 380, w: 160, h: 20, type: 'ground' });
     this.platforms.push({ x: 2600, y: 340, w: 160, h: 20, type: 'ground' });
 
@@ -53,23 +47,35 @@ export class Level {
 
   // Draw background elements (parallax sky, ruined skyscrapers, street clouds)
   drawBackground(ctx: CanvasRenderingContext2D, cameraX: number, cameraScale: number = 2.0) {
-    // 1. Dithered/Banded Sky (Chunky horizontal color stripes)
-    const skyColors = [
-      '#232630', '#2a2d38', '#313440', '#383b48', 
-      '#3f4250', '#464958', '#4b4d58', '#514f58', 
-      '#575258', '#5d5558', '#635957', '#665d56',
-      '#665d56', '#5d5558', '#514f58'
-    ];
+    // 1. Smooth Sky Gradient and Sun
     const skyHeight = 540 / cameraScale;
-    const stripeHeight = skyHeight / 15;
     const skyTop = 540 - skyHeight;
-    for (let i = 0; i < 15; i++) {
-      ctx.fillStyle = skyColors[i] || '#665d56';
-      ctx.fillRect(0, skyTop + i * stripeHeight, 960, stripeHeight + 1);
-    }
 
-    // 2. Parallax Smog Clouds (Slow moving dark smoke)
-    ctx.fillStyle = 'rgba(28, 29, 36, 0.4)';
+    const skyGrad = ctx.createLinearGradient(0, skyTop, 0, 540);
+    skyGrad.addColorStop(0, '#0ea5e9'); // Deep bright blue
+    skyGrad.addColorStop(1, '#e0f2fe'); // Light horizon
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, skyTop, 960, skyHeight);
+
+    // Realistic Glowing Sun
+    const sunX = 800 - cameraX * 0.05; // Slow parallax for sun
+    const sunY = skyTop + 80;
+    
+    ctx.save();
+    ctx.shadowBlur = 40;
+    ctx.shadowColor = '#fde047';
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, 35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 2. Parallax Clouds (Fluffy white clouds)
+    ctx.save();
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = 'rgba(0,0,0,0.15)';
+    ctx.shadowOffsetY = 5;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     const cloudParallax = cameraX * 0.12;
     this.drawCloud(ctx, 100 - cloudParallax, 60, 60);
     this.drawCloud(ctx, 400 - cloudParallax, 40, 80);
@@ -77,108 +83,135 @@ export class Level {
     this.drawCloud(ctx, 1100 - cloudParallax, 50, 70);
     this.drawCloud(ctx, 1600 - cloudParallax, 80, 90);
     this.drawCloud(ctx, 2200 - cloudParallax, 50, 60);
+    ctx.restore();
 
-    // 3. Far Parallax Silhouettes (Distant ruined towers at X * 0.22)
+    // 3. Far Parallax Hills (Smooth distant rolling hills at X * 0.22)
     const farParallax = cameraX * 0.22;
     ctx.save();
     ctx.translate(-farParallax, 0);
-    ctx.fillStyle = '#373a45'; // Darker silhouette grey
-    for (let x = 50; x < this.width; x += 250) {
-      const height = 280 + Math.floor((Math.sin(x * 0.05) + 1) * 60);
-      ctx.fillRect(x, 480 - height, 110, height);
-      
-      // Crumbling skyscraper tops (blocky bites taken out)
-      ctx.clearRect(x + 10, 480 - height, 20, 15);
-      ctx.clearRect(x + 70, 480 - height, 15, 25);
+    
+    // Create a smooth continuous path for the hills
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+    ctx.fillStyle = '#bae6fd';
+    ctx.beginPath();
+    ctx.moveTo(-200, 480);
+    for (let x = -200; x < this.width + 800; x += 300) {
+      const hillHeight = 150 + Math.floor((Math.sin(x * 0.02) + 1) * 50);
+      ctx.quadraticCurveTo(x + 150, 480 - hillHeight - 80, x + 300, 480 - hillHeight);
     }
+    ctx.lineTo(this.width + 800, 480);
+    ctx.lineTo(-200, 480);
+    ctx.fill();
     ctx.restore();
 
-    // 4. Mid Parallax Buildings (Detailed brick ruins & skyscrapers at X * 0.42)
+    // 4. Mid Parallax Suburban Houses (at X * 0.42)
     const midParallax = cameraX * 0.42;
     ctx.save();
     ctx.translate(-midParallax, 0);
 
-    for (let x = 120; x < this.width; x += 380) {
-      const bHeight = 320 + Math.floor((Math.cos(x * 0.03) + 1) * 50);
-      const bWidth = 170;
-      const bTop = 480 - bHeight;
+    for (let x = 120; x < this.width + 400; x += 320) {
+      const hWidth = 180;
+      const hHeight = 140 + Math.floor(Math.sin(x * 0.05) * 20); // 1-2 story houses
+      const hTop = 480 - hHeight;
 
-      // Base concrete/brick facade color
-      ctx.fillStyle = '#50535e'; // Mid brawler grey
-      ctx.fillRect(x, bTop, bWidth, bHeight);
-
-      // Shadow on left side of building (16-bit lighting)
-      ctx.fillStyle = '#41434c'; 
-      ctx.fillRect(x, bTop, 15, bHeight);
-
-      // Crumbling building top details
-      ctx.fillStyle = '#303138'; // Dark gap outlines for cracks
-      ctx.fillRect(x - 5, bTop - 4, bWidth + 10, 4); // Roof ledge
+      // Base house color
+      const colors = ['#fbcfe8', '#fed7aa', '#fef08a', '#a7f3d0', '#e0f2fe', '#ddd6fe'];
+      const shadeColors = ['#f472b6', '#fb923c', '#facc15', '#34d399', '#38bdf8', '#a78bfa'];
+      const cIndex = Math.abs(Math.floor(x / 320)) % colors.length;
       
-      // Crumble chunks on roof
-      ctx.clearRect(x + 30, bTop - 6, 20, 10);
-      ctx.clearRect(x + 110, bTop - 6, 30, 8);
+      // Draw 3D side wall
+      ctx.fillStyle = shadeColors[cIndex] || '#f472b6';
+      ctx.beginPath();
+      ctx.moveTo(x + hWidth, hTop);
+      ctx.lineTo(x + hWidth + 30, hTop - 15);
+      ctx.lineTo(x + hWidth + 30, 480 - 15);
+      ctx.lineTo(x + hWidth, 480);
+      ctx.fill();
 
-      // Draw rows of windows with grids and panels
-      for (let wy = bTop + 30; wy < 460; wy += 45) {
-        for (let wx = x + 25; wx < x + bWidth - 20; wx += 35) {
-          // Check if window is broken/empty (black) or has light (yellow/orange glow)
-          const randVal = Math.sin(wx * 2.3 + wy * 1.7);
-          if (randVal < -0.4) {
-            // Broken empty window pane
-            ctx.fillStyle = '#1e1f24';
-            ctx.fillRect(wx, wy, 20, 25);
-            // Cracks on frame
-            ctx.fillStyle = '#303138';
-            ctx.fillRect(wx - 2, wy + 8, 2, 6);
-          } else if (randVal > 0.5) {
-            // Glowing window (orange fire glow)
-            ctx.fillStyle = '#d97706'; // Dark orange
-            ctx.fillRect(wx, wy, 20, 25);
-            ctx.fillStyle = '#fbbf24'; // Yellow center
-            ctx.fillRect(wx + 4, wy + 4, 12, 17);
-            
-            // Pane grids (cross)
-            ctx.fillStyle = '#5c3905';
-            ctx.fillRect(wx + 9, wy, 2, 25);
-            ctx.fillRect(wx, wy + 11, 20, 2);
-          } else {
-            // Standard retro brawler blue-grey window pane
-            ctx.fillStyle = '#64748b'; // Window blue-grey
-            ctx.fillRect(wx, wy, 20, 25);
-            
-            // Glass reflections (chunky blocky diagonal)
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-            ctx.fillRect(wx + 4, wy + 18, 4, 4);
-            ctx.fillRect(wx + 8, wy + 12, 4, 4);
-            ctx.fillRect(wx + 12, wy + 6, 4, 4);
+      // Front Face
+      ctx.fillStyle = colors[cIndex] || '#fbcfe8';
+      ctx.fillRect(x, hTop, hWidth, hHeight);
 
-            // Window frames
-            ctx.fillStyle = '#334155';
-            ctx.fillRect(wx + 9, wy, 2, 25);
-            ctx.fillRect(wx, wy + 11, 20, 2);
-          }
-
-          // Shaded window sill (16-bit blocky ledge)
-          ctx.fillStyle = '#2d2e34';
-          ctx.fillRect(wx - 2, wy + 25, 24, 3);
-        }
+      // Siding lines (horizontal)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+      for (let sy = hTop + 10; sy < 480; sy += 15) {
+        ctx.fillRect(x, sy, hWidth, 2);
       }
 
-      // Vertical brick column lines (shading panels)
-      ctx.fillStyle = '#484b55';
-      for (let bx = x + 15; bx < x + bWidth; bx += 55) {
-        ctx.fillRect(bx, bTop, 2, bHeight);
+      const roofPeak = hTop - 80;
+
+      // Pitched Roof Side (3D effect)
+      ctx.fillStyle = '#1e293b'; // Darker roof shade
+      ctx.beginPath();
+      ctx.moveTo(x + hWidth / 2, roofPeak);
+      ctx.lineTo(x + hWidth / 2 + 30, roofPeak - 15);
+      ctx.lineTo(x + hWidth + 15 + 30, hTop - 15);
+      ctx.lineTo(x + hWidth + 15, hTop);
+      ctx.fill();
+
+      // Pitched Roof Front
+      ctx.fillStyle = '#475569'; // Dark slate roof
+      ctx.beginPath();
+      ctx.moveTo(x - 15, hTop);
+      ctx.lineTo(x + hWidth / 2, roofPeak);
+      ctx.lineTo(x + hWidth + 15, hTop);
+      ctx.closePath();
+      ctx.fill();
+
+      // Chimney
+      if (Math.sin(x) > 0) {
+        ctx.fillStyle = '#ef4444'; // Red brick chimney
+        ctx.fillRect(x + hWidth - 40, roofPeak + 20, 20, 40);
+        ctx.fillStyle = '#1e293b'; // Chimney cap
+        ctx.fillRect(x + hWidth - 42, roofPeak + 15, 24, 5);
+      }
+
+      // Front Door
+      const doorX = x + hWidth / 2 - 15;
+      const doorY = 480 - 45;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(doorX, doorY, 30, 45);
+      // Door knob
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(doorX + 24, doorY + 25, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Smooth Glowing Windows
+      for (let wy = hTop + 20; wy < doorY - 10; wy += 50) {
+        for (let wx of [x + 20, x + hWidth - 50]) {
+          // Window glow/glint
+          ctx.save();
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = '#fde047';
+          ctx.fillStyle = '#fef08a';
+          ctx.fillRect(wx, wy, 30, 35);
+          ctx.restore();
+
+          // Smooth Window frames (White)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(wx - 2, wy - 2, 34, 4); // Top frame
+          ctx.fillRect(wx - 2, wy + 35, 34, 4); // Bottom sill
+          ctx.fillRect(wx - 2, wy, 4, 35); // Left frame
+          ctx.fillRect(wx + 28, wy, 4, 35); // Right frame
+          // Crossbars
+          ctx.fillRect(wx + 13, wy, 4, 35); // Vertical crossbar
+          ctx.fillRect(wx, wy + 15, 30, 4); // Horizontal crossbar
+        }
       }
     }
     ctx.restore();
   }
 
-  // Draw clouds using Canvas rects (pixelated style)
+  // Draw smooth fluffy clouds using arcs
   private drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
-    ctx.fillRect(x - size * 0.5, y, size * 1.5, size * 0.4);
-    ctx.fillRect(x - size * 0.2, y - size * 0.2, size * 1.1, size * 0.2);
-    ctx.fillRect(x + size * 0.1, y - size * 0.4, size * 0.6, size * 0.2);
+    ctx.beginPath();
+    ctx.arc(x, y, size * 0.4, Math.PI, 0);
+    ctx.arc(x + size * 0.5, y - size * 0.1, size * 0.5, Math.PI, 0);
+    ctx.arc(x + size * 1.1, y, size * 0.35, Math.PI, 0);
+    ctx.rect(x - size * 0.4, y, size * 1.5, size * 0.1);
+    ctx.fill();
   }
 
   // Draw solid level platforms (sidewalk, fences, boxes)
@@ -186,138 +219,141 @@ export class Level {
     ctx.save();
     ctx.translate(-cameraX, 0);
 
+    // Draw tutorial texts
+    ctx.save();
+    ctx.fillStyle = '#1e293b';
+    ctx.font = '24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(255,255,255,0.8)';
+    ctx.shadowBlur = 4;
+    for (const t of this.tutorialTexts) {
+      ctx.fillText(t.text, t.x, 220);
+    }
+    ctx.restore();
+
     for (const p of this.platforms) {
       if (p.broken || p.isBarrier) continue;
 
       if (p.type === 'ground') {
-        // Concrete ground blocky tiles (highly textured)
-        ctx.fillStyle = '#474954'; // Dark concrete slate
+        // Isometric Top Face (Grass)
+        ctx.fillStyle = '#86efac'; // Lighter grass for top
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + 30, p.y - 15);
+        ctx.lineTo(p.x + p.w + 30, p.y - 15);
+        ctx.lineTo(p.x + p.w, p.y);
+        ctx.fill();
+
+        // Front Face (Dirt/Stone)
+        ctx.fillStyle = '#78350f'; // Dirt brown
         ctx.fillRect(p.x, p.y, p.w, p.h);
 
-        // Top curb border (concrete edge)
-        ctx.fillStyle = '#6b7280'; // Lighter gray
-        ctx.fillRect(p.x, p.y, p.w, 4);
-        ctx.fillStyle = '#374151'; // Dark shading
-        ctx.fillRect(p.x, p.y + 4, p.w, 2);
+        // Top grass overhang on front face
+        ctx.fillStyle = '#4ade80'; // Bright grass green
+        ctx.fillRect(p.x, p.y, p.w, 8);
+        ctx.fillStyle = '#22c55e'; // Dark shading
+        ctx.fillRect(p.x, p.y + 8, p.w, 3);
 
-        // expansion joints (lines separating sections)
-        const panelSize = 120;
-        for (let j = p.x; j < p.x + p.w; j += panelSize) {
-          ctx.fillStyle = '#1e293b';
-          ctx.fillRect(j, p.y, 4, p.h);
-          
-          // Shading on expansion joints
-          ctx.fillStyle = '#111827';
-          ctx.fillRect(j + 3, p.y, 1, p.h);
-          
-          // Draw random concrete cracks inside panels programmatically using deterministic math
+        // Draw scattered flowers
+        for (let j = p.x + 20; j < p.x + p.w; j += 120) {
           const offset = Math.sin(j * 1.5) * 40 + 50;
-          ctx.fillStyle = '#1e293b';
-          // Draw crack 1
-          ctx.fillRect(j + offset, p.y + 6, 2, 8);
-          ctx.fillRect(j + offset - 3, p.y + 14, 5, 2);
-          ctx.fillRect(j + offset - 3, p.y + 16, 2, 12);
-          
-          // Draw crack 2 (rare)
-          if (Math.sin(j * 4.3) > 0.4) {
-            ctx.fillRect(j + offset + 35, p.y + 20, 2, 10);
-            ctx.fillRect(j + offset + 35, p.y + 30, 8, 2);
-            ctx.fillRect(j + offset + 41, p.y + 32, 2, 8);
-          }
-        }
+          ctx.fillStyle = '#fb7185'; // Pink flower
+          ctx.fillRect(j + offset, p.y + 16, 4, 4);
+          ctx.fillStyle = '#fde047'; // Yellow center
+          ctx.fillRect(j + offset + 1, p.y + 17, 2, 2);
 
-        // Draw scattered concrete texture noise dots (using Math.sin for deterministic placement)
-        ctx.fillStyle = '#555866'; // lighter dots
-        for (let tx = p.x + 10; tx < p.x + p.w - 10; tx += 65) {
-          const dy = 12 + Math.floor((Math.sin(tx * 0.9) + 1) * 20);
-          ctx.fillRect(tx, p.y + dy, 2, 2);
-        }
-        ctx.fillStyle = '#373a46'; // darker dots
-        for (let tx = p.x + 35; tx < p.x + p.w - 10; tx += 75) {
-          const dy = 12 + Math.floor((Math.cos(tx * 1.2) + 1) * 20);
-          ctx.fillRect(tx, p.y + dy, 2, 2);
-        }
-
-        // Scatter concrete brick rubble piles to fit "ruined city" street
-        for (let rx = p.x + 220; rx < p.x + p.w; rx += 480) {
-          ctx.fillStyle = '#7c2d12'; // Dark red brick
-          ctx.fillRect(rx, p.y - 12, 10, 6);
-          ctx.fillRect(rx + 6, p.y - 6, 8, 6);
-          ctx.fillStyle = '#9a3412'; // Highlight brick
-          ctx.fillRect(rx + 2, p.y - 10, 8, 2);
-          ctx.fillRect(rx + 6, p.y - 4, 6, 2);
-          
-          ctx.fillStyle = '#451a03'; // Outline/shadow
-          ctx.fillRect(rx - 2, p.y - 14, 14, 2);
-          ctx.fillRect(rx, p.y - 6, 2, 6);
+          // Second flower
+          ctx.fillStyle = '#c084fc'; // Purple flower
+          ctx.fillRect(j + offset + 35, p.y + 30, 4, 4);
+          ctx.fillStyle = '#fde047'; // Yellow center
+          ctx.fillRect(j + offset + 36, p.y + 31, 2, 2);
         }
       } else if (p.type === 'obstacle') {
-        // 16-bit weathered wooden picket fence
-        const outlineColor = '#1f2937';
-        for (let fx = p.x; fx < p.x + p.w; fx += 12) {
-          // Outline silhouette
-          ctx.fillStyle = outlineColor;
-          ctx.fillRect(fx - 1, p.y - 1, 8, p.h + 2);
-          ctx.fillRect(fx + 1, p.y - 5, 4, 4);
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.4)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetX = -8;
+        ctx.shadowOffsetY = 8;
 
-          // Wood picket base (light weathered gray/white)
-          ctx.fillStyle = '#e2e8f0';
-          ctx.fillRect(fx, p.y, 6, p.h);
-          ctx.fillRect(fx + 2, p.y - 4, 2, 4); // Pointy top
+        // Smooth vector wooden picket fence
+        const woodColor = '#fcd34d';
+        const outlineColor = '#b45309';
 
-          // Shading (right shadow)
-          ctx.fillStyle = '#94a3b8';
-          ctx.fillRect(fx + 4, p.y, 2, p.h);
-          ctx.fillRect(fx + 3, p.y - 3, 1, 3);
+        ctx.fillStyle = woodColor;
+        ctx.strokeStyle = outlineColor;
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
 
-          // Wood grain vertical knot line
-          ctx.fillStyle = '#cbd5e1';
-          ctx.fillRect(fx + 2, p.y + 10, 1, p.h - 15);
-          ctx.fillStyle = '#475569';
-          ctx.fillRect(fx + 2, p.y + 18, 2, 2); // wood knot dot
+        // Draw pickets
+        for (let fx = p.x; fx < p.x + p.w; fx += 16) {
+          ctx.beginPath();
+          ctx.moveTo(fx, p.y + 10);
+          ctx.lineTo(fx + 6, p.y);
+          ctx.lineTo(fx + 12, p.y + 10);
+          ctx.lineTo(fx + 12, p.y + p.h);
+          ctx.lineTo(fx, p.y + p.h);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
         }
-        
+
         // Draw crossbeams
-        ctx.fillStyle = outlineColor;
-        ctx.fillRect(p.x - 2, p.y + 13, p.w + 4, 8);
-        ctx.fillRect(p.x - 2, p.y + p.h - 22, p.w + 4, 8);
+        ctx.beginPath();
+        ctx.roundRect(p.x - 4, p.y + 20, p.w + 8, 12, 6);
+        ctx.roundRect(p.x - 4, p.y + p.h - 30, p.w + 8, 12, 6);
+        ctx.fill();
+        ctx.stroke();
 
-        ctx.fillStyle = '#64748b'; // Crossbeam color
-        ctx.fillRect(p.x, p.y + 14, p.w, 6);
-        ctx.fillRect(p.x, p.y + p.h - 21, p.w, 6);
-        ctx.fillStyle = '#475569'; // Shadow
-        ctx.fillRect(p.x, p.y + 18, p.w, 2);
-        ctx.fillRect(p.x, p.y + p.h - 17, p.w, 2);
+        ctx.restore();
       } else if (p.type === 'box') {
-        // Detailed 16-bit Cardboard Box
-        const outlineColor = '#451a03';
-        ctx.fillStyle = outlineColor;
-        ctx.fillRect(p.x - 2, p.y - 2, p.w + 4, p.h + 4); // Outline
+        // Isometric 3D Cardboard Box
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetX = -8;
+        ctx.shadowOffsetY = 8;
 
-        ctx.fillStyle = '#ca8a04'; // Cardboard brown base
-        ctx.fillRect(p.x, p.y, p.w, p.h);
-        
-        ctx.fillStyle = '#a16207'; // Left and bottom shadows
-        ctx.fillRect(p.x, p.y, 4, p.h);
-        ctx.fillRect(p.x, p.y + p.h - 4, p.w, 4);
+        const bx = p.x; const by = p.y; const bw = p.w; const bh = p.h;
+        const depth = 15;
 
-        ctx.fillStyle = '#eab308'; // Highlight edge
-        ctx.fillRect(p.x, p.y, p.w, 2);
-        ctx.fillRect(p.x + p.w - 2, p.y, 2, p.h);
+        // Top Face
+        ctx.fillStyle = '#fef08a'; // Light cardboard top
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(bx + depth, by - depth);
+        ctx.lineTo(bx + bw + depth, by - depth);
+        ctx.lineTo(bx + bw, by);
+        ctx.fill();
 
-        // Shipping tape (detailed yellow/amber tape)
-        ctx.fillStyle = outlineColor;
-        ctx.fillRect(p.x + p.w / 2 - 5, p.y, 10, p.h);
-        ctx.fillStyle = '#fbbf24'; // Tape yellow
-        ctx.fillRect(p.x + p.w / 2 - 4, p.y, 8, p.h);
-        ctx.fillStyle = '#f59e0b'; // Shading on tape
-        ctx.fillRect(p.x + p.w / 2, p.y, 4, p.h);
+        // Right Side Face
+        ctx.fillStyle = '#a16207'; // Dark cardboard side
+        ctx.beginPath();
+        ctx.moveTo(bx + bw, by);
+        ctx.lineTo(bx + bw + depth, by - depth);
+        ctx.lineTo(bx + bw + depth, by + bh - depth);
+        ctx.lineTo(bx + bw, by + bh);
+        ctx.fill();
 
-        // Cardboard stamps / labels
-        ctx.fillStyle = '#78350f'; // Dark brown stamps
-        ctx.fillRect(p.x + 6, p.y + 10, 8, 4);
-        ctx.fillRect(p.x + 6, p.y + 16, 5, 2);
+        // Front Face
+        ctx.fillStyle = '#ca8a04'; // Normal cardboard front
+        ctx.fillRect(bx, by, bw, bh);
+
+        // Highlight edge
+        ctx.fillStyle = '#eab308';
+        ctx.fillRect(bx, by, bw, 2);
+
+        // Tape on front
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(bx + bw / 2 - 4, by, 8, bh);
+
+        ctx.restore();
       } else if (p.type === 'gate') {
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetX = -10;
+        ctx.shadowOffsetY = 5;
+
         // Heavy rusted steel bars neighborhood gate
         const borderOutline = '#0f172a';
         ctx.fillStyle = borderOutline;
@@ -353,72 +389,7 @@ export class Level {
         ctx.fillRect(p.x + 12, p.y + 40, 4, 8);
         ctx.fillRect(p.x + 16, p.y + 44, 3, 10);
         ctx.fillRect(p.x + 8, p.y + 130, 5, 6);
-      } else if (p.type === 'overhang') {
-        // Gritty brawler tree branch overhang
-        const outlineColor = '#1c1917';
-        
-        // 1. Draw branch outline & bark shading
-        ctx.fillStyle = outlineColor;
-        ctx.fillRect(p.x - 2, p.y + p.h - 22, p.w + 4, 24); // Branch outline
-
-        ctx.fillStyle = '#451a03'; // Dark brown bark
-        ctx.fillRect(p.x, p.y + p.h - 20, p.w, 20);
-        ctx.fillStyle = '#78350f'; // Highlight bark lines
-        ctx.fillRect(p.x, p.y + p.h - 20, p.w, 5);
-        ctx.fillRect(p.x + 20, p.y + p.h - 12, 40, 2);
-
-        // 2. Leaf Clusters (translucent layered dark olive leaves)
-        const leafOutline = '#022c22';
-        
-        // Canopy outline
-        ctx.fillStyle = leafOutline;
-        ctx.fillRect(p.x - 14, p.y - 2, p.w + 28, p.h - 16);
-        ctx.fillRect(p.x - 4, p.y - 4, p.w + 8, 4);
-
-        // Outer foliage (Bright green)
-        ctx.fillStyle = '#10b981';
-        ctx.fillRect(p.x - 10, p.y, p.w + 20, p.h - 20);
-
-        // Mid foliage (Dark teal green)
-        ctx.fillStyle = '#065f46';
-        ctx.fillRect(p.x - 6, p.y + 8, p.w + 12, p.h - 32);
-
-        // Inner foliage (Darkest pine green)
-        ctx.fillStyle = '#022c22';
-        ctx.fillRect(p.x, p.y + 16, p.w, p.h - 44);
-      } else if (p.type === 'trashcan') {
-        // Detailed Corrugated Steel Trash Can
-        const outlineColor = '#1e293b';
-        ctx.fillStyle = outlineColor;
-        ctx.fillRect(p.x - 2, p.y - 5, p.w + 4, p.h + 7); // Outline
-
-        ctx.fillStyle = '#64748b'; // Steel base gray
-        ctx.fillRect(p.x, p.y, p.w, p.h);
-
-        // Shading highlights and shadows
-        ctx.fillStyle = '#94a3b8'; // Left highlight
-        ctx.fillRect(p.x, p.y, 5, p.h);
-        ctx.fillStyle = '#475569'; // Right shadow
-        ctx.fillRect(p.x + p.w - 5, p.y, 5, p.h);
-
-        // Lid handle & rim
-        ctx.fillStyle = '#475569'; // Dark lid rim
-        ctx.fillRect(p.x, p.y, p.w, 4);
-        ctx.fillStyle = '#cbd5e1'; // Metallic lid highlight
-        ctx.fillRect(p.x, p.y, p.w, 2);
-        
-        ctx.fillStyle = '#334155'; // Handle outline
-        ctx.fillRect(p.x + p.w / 2 - 8, p.y - 4, 16, 4);
-        ctx.fillStyle = '#64748b'; // Handle fill
-        ctx.fillRect(p.x + p.w / 2 - 6, p.y - 3, 12, 3);
-
-        // Vertical corrugation bars with highlight/shadow pairs (16-bit pixel sheen)
-        for (let cx = p.x + 6; cx < p.x + p.w - 4; cx += 8) {
-          ctx.fillStyle = '#334155'; // Dark crease
-          ctx.fillRect(cx, p.y + 4, 2, p.h - 4);
-          ctx.fillStyle = '#94a3b8'; // Bright ridge
-          ctx.fillRect(cx + 2, p.y + 4, 2, p.h - 4);
-        }
+        ctx.restore();
       }
     }
 

@@ -199,29 +199,33 @@ export class GameEngine {
     // Reset level obstacles
     this.level.initLevel();
 
-    // Spawn Suburbs Enemies in Grouped Waves
+    // Spawn Suburbs Enemies (Sky-Drop Tutorial Arenas)
     this.enemies = [
-      // Group 1: Stray Dog pack (X=1100 to 1160)
-      new Enemy(1100, 450, 'dog', 0),
-      new Enemy(1160, 450, 'dog', 0),
+      // Arena 1: Stray Dog Drop (Indices 0, 1)
+      new Enemy(550, -100, 'dog', 0),
+      new Enemy(700, -200, 'dog', 0),
 
-      // Group 2: Angry Pigeon swarm (X=1450 to 1510)
-      new Enemy(1450, 440, 'pigeon', 100),
-      new Enemy(1510, 440, 'pigeon', 100),
+      // Arena 2: Angry Pigeon Drop (Indices 2, 3)
+      new Enemy(1000, -100, 'pigeon', 100),
+      new Enemy(1200, -200, 'pigeon', 100),
 
-      // Group 3: HOA Inspector squad (X=2100 to 2380)
-      new Enemy(2100, 420, 'inspector', 350),
-      new Enemy(2380, 420, 'inspector', 250),
+      // Arena 3: HOA Inspector Drop (Indices 4, 5)
+      new Enemy(1600, -100, 'inspector', 350),
+      new Enemy(1750, -200, 'inspector', 250),
 
-      // Group 4: Post-campfire ambush (X=2650 to 2850)
-      new Enemy(2650, 450, 'dog', 150),
-      new Enemy(2700, 440, 'pigeon', 80),
+      // Group 4: Post-campfire ambush (X=2300 to 2850)
+      new Enemy(2300, 450, 'dog', 150),
+      new Enemy(2500, 440, 'pigeon', 80),
       new Enemy(2760, 440, 'pigeon', 80),
       new Enemy(2850, 420, 'inspector', 300)
     ];
 
-    // Re-initialize arenas (empty to remove forced movement blocks/laser barriers)
-    this.arenas = [];
+    // Initialize the 3 locked tutorial arenas
+    this.arenas = [
+      { id: 'arena_dogs', triggerX: 500, leftBarrierX: 400, rightBarrierX: 800, isActive: false, isCleared: false, enemyIndices: [0, 1], leftPlatform: null, rightPlatform: null },
+      { id: 'arena_pigeons', triggerX: 900, leftBarrierX: 800, rightBarrierX: 1400, isActive: false, isCleared: false, enemyIndices: [2, 3], leftPlatform: null, rightPlatform: null },
+      { id: 'arena_inspectors', triggerX: 1500, leftBarrierX: 1400, rightBarrierX: 1900, isActive: false, isCleared: false, enemyIndices: [4, 5], leftPlatform: null, rightPlatform: null }
+    ];
 
 
 
@@ -403,31 +407,7 @@ export class GameEngine {
           }
           this.drops.push(new Drop(p.x + p.w / 2, p.y + p.h / 2, 'xp', 15));
         }
-      } else if (p.type === 'trashcan' && !p.broken) {
-        if (
-          ax + aw > p.x &&
-          ax < p.x + p.w &&
-          ay + ah > p.y &&
-          ay < p.y + p.h
-        ) {
-          if (this.player.comboStep === 3) {
-            // Break the trashcan!
-            p.broken = true;
-            this.spawnBreakEffect(p.x + p.w / 2, p.y + p.h / 2, '#64748b');
-            
-            // Spawn coins/XP out of broken trashcan
-            for (let i = 0; i < 3; i++) {
-              this.drops.push(new Drop(p.x + p.w / 2, p.y + p.h / 2, 'coin', 10));
-            }
-            this.drops.push(new Drop(p.x + p.w / 2, p.y + p.h / 2, 'xp', 15));
-          } else {
-            this.spawnHitSpark(p.x + p.w / 2, p.y + p.h / 2);
-            if (this.tutorialPrompt) {
-              this.tutorialPrompt.textContent = "Only the 3rd hit (Roundhouse Kick) can smash the trash can!";
-            }
-          }
         }
-      }
     }
 
     // Check collision against enemies
@@ -698,6 +678,7 @@ export class GameEngine {
           // If Carl is crouching, Pigeon flies right over him!
           if (this.player.isCrouching && enemy.y < py + 10) continue;
           this.player.takeDamage(10);
+          enemy.swoopUp();
         } else if (enemy.type === 'officer_bob') {
           this.player.takeDamage(25);
         }
@@ -820,7 +801,7 @@ export class GameEngine {
         y: y,
         vx: (Math.random() - 0.5) * 6,
         vy: (Math.random() - 0.5) * 6 - 2,
-        color: i % 2 === 0 ? '#f59e0b' : '#ef4444',
+        color: i % 2 === 0 ? '#fb7185' : '#fde047',
         size: Math.random() * 4 + 3,
         life: 0,
         maxLife: 20 + Math.random() * 10
@@ -848,33 +829,25 @@ export class GameEngine {
     const activeArena = this.arenas.find(a => a.isActive && !a.isCleared);
     if (activeArena) {
       let enemyName = 'enemies';
-      if (activeArena.id === 'dogs') enemyName = 'Stray Dogs';
-      else if (activeArena.id === 'pigeons') enemyName = 'Angry Pigeons';
-      else if (activeArena.id === 'inspectors') enemyName = 'HOA Inspectors';
+      if (activeArena.id === 'arena_dogs') enemyName = 'Stray Dogs. Press J to punch!';
+      else if (activeArena.id === 'arena_pigeons') enemyName = 'Angry Pigeons. Jump or punch!';
+      else if (activeArena.id === 'arena_inspectors') enemyName = 'HOA Inspectors. Use full 3-hit combo to break guard!';
       else if (activeArena.id === 'ambush') enemyName = 'Ambush Patrol';
       
-      this.tutorialPrompt.textContent = `COMBAT ZONE: Defeat the ${enemyName} to drop the laser barriers!`;
+      this.tutorialPrompt.textContent = `COMBAT ZONE: Defeat the ${enemyName}`;
       return;
     }
 
     const px = this.player.x;
     if (px < 400) {
-      this.tutorialPrompt.textContent = 'Press A / D to Walk. Hold W to Jump!';
-    } else if (px >= 400 && px < 600) {
-      this.tutorialPrompt.textContent = 'Jump over Grandma\'s white picket fence!';
-    } else if (px >= 600 && px < 800) {
-      this.tutorialPrompt.textContent = 'Ducking time! Press S to Crouch under the low tree branch!';
-    } else if (px >= 800 && px < 1000) {
-      this.tutorialPrompt.textContent = 'Smash the Trash Can! Press J consecutively to perform a Punch-Punch-Kick combo.';
-    } else if (px >= 1000 && px < 1300) {
-      this.tutorialPrompt.textContent = 'Defeat the Stray Dogs to drop the laser barriers!';
-    } else if (px >= 1300 && px < 1700) {
-      this.tutorialPrompt.textContent = 'Jump over low-charging pigeons or punch them!';
-    } else if (px >= 1700 && px < 1950) {
+      this.tutorialPrompt.textContent = 'Press A / D to Walk. Hold W or Space to Jump!';
+    } else if (px >= 400 && px < 500) {
+      this.tutorialPrompt.textContent = 'Jump over Grandma\\'s white picket fence!';
+    } else if (px >= 500 && px < 1900) {
+      this.tutorialPrompt.textContent = 'Walk forward to trigger the next Combat Zone!';
+    } else if (px >= 1900 && px < 2100) {
       this.tutorialPrompt.textContent = 'Stand near campfire. Press R to rest & equip skills!';
-    } else if (px >= 1950 && px < 2580) {
-      this.tutorialPrompt.textContent = 'HOA Inspectors block front attacks! Use Roundhouse Kick (3rd J combo hit) to break guard!';
-    } else if (px >= 2580 && px < 3100) {
+    } else if (px >= 2100 && px < 3100) {
       this.tutorialPrompt.textContent = 'Use E / F to activate equipped skills!';
     } else if (px >= 3100 && !this.bossDefeated) {
       this.tutorialPrompt.textContent = 'BOSS: Officer Bob! Jump over Segway charges!';
@@ -1200,7 +1173,7 @@ export class GameEngine {
         y: groundY - Math.random() * 380,
         vx: (Math.random() - 0.5) * 3,
         vy: -Math.random() * 4 - 2,
-        color: i % 2 === 0 ? '#ef4444' : '#f87171',
+        color: i % 2 === 0 ? '#c084fc' : '#e879f9',
         size: Math.random() * 3 + 2,
         life: 0,
         maxLife: 20 + Math.random() * 20
@@ -1219,7 +1192,7 @@ export class GameEngine {
         y: spawnY,
         vx: (Math.random() - 0.5) * 8,
         vy: (Math.random() - 0.5) * 4,
-        color: i % 2 === 0 ? '#10b981' : '#fbbf24',
+        color: i % 2 === 0 ? '#34d399' : '#fde047',
         size: Math.random() * 4 + 2,
         life: 0,
         maxLife: 15 + Math.random() * 25
@@ -1255,17 +1228,17 @@ export class GameEngine {
       ctx.fillRect(x - blockWidth / 2 - 2, y, blockWidth + 4, blockHeight);
       
       // Neon warning block
-      ctx.fillStyle = isRed ? '#ef4444' : '#ffffff';
+      ctx.fillStyle = isRed ? '#c084fc' : '#ffffff';
       ctx.fillRect(x - blockWidth / 2, y + 2, blockWidth, blockHeight - 4);
       
       // Core highlight block
-      ctx.fillStyle = isRed ? '#fca5a5' : '#e2e8f0';
+      ctx.fillStyle = isRed ? '#e879f9' : '#e2e8f0';
       ctx.fillRect(x - blockWidth / 2 + 3, y + 4, blockWidth - 6, blockHeight - 8);
     }
 
     // Draw warning text above player height
     if (Math.floor(this.tick / 20) % 2 === 0) {
-      ctx.fillStyle = '#ef4444';
+      ctx.fillStyle = '#c084fc';
       ctx.font = '6px "Press Start 2P"';
       ctx.textAlign = 'center';
       ctx.fillText('HALT', x, wallYStart - 10);

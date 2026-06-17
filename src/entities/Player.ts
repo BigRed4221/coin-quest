@@ -146,8 +146,8 @@ export class Player {
       }
     }
 
-    // 3. Jump logic (W)
-    if ((keys['w'] || keys['ArrowUp']) && this.isGrounded && !this.isCrouching) {
+    // 3. Jump logic (W, Space)
+    if ((keys['w'] || keys[' '] || keys['ArrowUp']) && this.isGrounded && !this.isCrouching) {
       this.vy = this.jumpForce;
       this.isGrounded = false;
     }
@@ -455,30 +455,31 @@ export class Player {
     // Core color palette
     const colorOutline = isGoldActive ? (tick % 6 < 3 ? '#ffe600' : '#d4af37') : '#000000';
     
-    const colorShirt = isGoldActive ? '#fbbf24' : '#dc2626';
-    const colorShirtShade = isGoldActive ? '#b45309' : '#991b1b';
-    const colorShirtFlowers = isGoldActive ? '#ffd700' : '#fde047';
+    const colorShirt = isGoldActive ? '#fbbf24' : '#0ea5e9'; // Clean sky-blue t-shirt
+    const colorShirtShade = isGoldActive ? '#b45309' : '#0284c7';
+    const colorShirtFlowers = colorShirt; // Hide flowers
     
-    const colorShorts = isGoldActive ? '#fef08a' : '#d2b48c';
-    const colorShortsShade = isGoldActive ? '#ca8a04' : '#b59970';
+    const colorShorts = isGoldActive ? '#fef08a' : '#94a3b8'; // Slate shorts
+    const colorShortsShade = isGoldActive ? '#ca8a04' : '#64748b';
     
-    const colorHair = isGoldActive ? '#fde047' : '#0f172a'; // Pure near-black hair
-    const colorHairHighlight = isGoldActive ? '#fef08a' : '#334155'; // Dark blue-gray highlights
+    const colorHair = isGoldActive ? '#fde047' : '#334155'; // Dark slate hair
+    const colorHairHighlight = isGoldActive ? '#fef08a' : '#475569';
     
-    const colorBelt = isGoldActive ? '#b45309' : '#78350f'; // Brown leather belt
-    const colorBeltHighlight = isGoldActive ? '#fef08a' : '#ffd700'; // Gold buckle
+    const colorBelt = isGoldActive ? '#b45309' : '#1e293b'; // Simple dark belt
+    const colorBeltHighlight = colorBelt;
     
     const colorSkin = isGoldActive ? '#fef08a' : '#df9a66'; // Rich skin
-    const colorSkinShade = isGoldActive ? '#ca8a04' : '#9a3412'; // Deeper, high-contrast copper shadow
+    const colorSkinShade = isGoldActive ? '#ca8a04' : '#9a3412';
     
-    const colorWraps = isGoldActive ? '#fbbf24' : '#b91c1c'; // Saturated wrap red
+    const colorShoes = isGoldActive ? '#b45309' : '#1e293b'; // Simple sneakers
     
-    const colorHeadband = isGoldActive ? '#fbbf24' : '#b91c1c';
-    const colorHeadbandShade = isGoldActive ? '#b45309' : '#7f1d1d';
-
-    const colorSandalSole = isGoldActive ? '#b45309' : '#78350f';
-    const colorSandalStrap = isGoldActive ? '#fef08a' : '#451a03';
-    const colorSunglasses = isGoldActive ? '#ffd700' : '#111111';
+    // Fallbacks for removed details to prevent ReferenceError
+    const colorWraps = colorSkin;
+    const colorHeadband = colorHair;
+    const colorHeadbandShade = colorHairHighlight;
+    const colorSandalSole = colorShoes;
+    const colorSandalStrap = colorShoes;
+    const colorSunglasses = 'rgba(0,0,0,0)'; // Transparent
 
     const gridSize = 4;
     const setColor = (color: string) => {
@@ -486,11 +487,13 @@ export class Player {
     };
     const drawRect = (color: string, rx: number, ry: number, rw: number, rh: number) => {
       setColor(color);
-      const x = Math.floor(rx / gridSize) * gridSize;
-      const y = Math.floor(ry / gridSize) * gridSize;
-      const w = Math.ceil(rw / gridSize) * gridSize;
-      const h = Math.ceil(rh / gridSize) * gridSize;
-      ctx.fillRect(x, y, w, h);
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(rx, ry, rw, rh, Math.min(rw, rh) * 0.3); // Smooth rounded corners
+        ctx.fill();
+      } else {
+        ctx.fillRect(rx, ry, rw, rh);
+      }
     };
 
     const bob = (this.isRunning && !this.isCoinSliding) ? Math.floor(Math.sin(tick * 0.45) * 3) : 0;
@@ -505,50 +508,50 @@ export class Player {
         drawRect(colorShorts, -12, -12, 24, 8);
         drawRect(colorShortsShade, -12, -12, 6, 8);
         drawRect(colorSkin, -13, -4, 10, 3);
-        drawRect(colorSandalStrap, -11, -3, 3, 1);
-        drawRect(colorSandalSole, -13, -1, 10, 1);
+        drawRect(colorShoes, -13, -1, 10, 2); // Simple shoe
         
         // SUPPORT LEG KICK FIX
         if (!(this.attackActiveTimer > 0 && this.comboStep === 3)) {
           drawRect(colorSkin, 3, -4, 10, 3);
-          drawRect(colorSandalStrap, 5, -3, 3, 1);
-          drawRect(colorSandalSole, 3, -1, 10, 1);
+          drawRect(colorShoes, 3, -1, 10, 2); // Simple shoe
         }
 
-        // 2. Torso (Hawaiian shirt lowered)
+        // 2. Torso (Simple T-shirt)
         drawRect(colorShirt, -12, -28 + bob, 24, 16);
         drawRect(colorShirtShade, -12, -28 + bob, 6, 16);
         
-        // Hawaiian floral print
-        if (!isOutline) {
-          drawRect(colorShirtFlowers, -8, -24 + bob, 4, 4);
-          drawRect(colorShirtFlowers, 4, -20 + bob, 4, 4);
-          drawRect(colorShirtFlowers, -4, -16 + bob, 4, 4);
-        }
-        
         // Belt
         drawRect(colorBelt, -13, -16 + bob, 26, 4);
-        drawRect(colorBeltHighlight, -3, -16 + bob, 6, 4);
-
-        // Chest opening skin
-        drawRect(colorSkin, -2, -28 + bob, 4, 6);
 
         // 3. Head & Hair
         drawRect(colorSkin, -7, -42 + bob, 14, 14);
         
-        // Face details: Sunglasses
+        // Face details
         if (!isOutline) {
-          drawRect(colorSunglasses, 0, -36 + bob, 8, 4);
-          drawRect('#ffffff', 4, -36 + bob, 4, 4); // glare
+          // Eyebrows
+          ctx.fillStyle = colorHair;
+          ctx.fillRect(-2, -40 + bob, 4, 1);
+          ctx.fillRect(4, -40 + bob, 4, 1);
+
+          // Eyes
+          ctx.fillStyle = '#111111';
+          ctx.fillRect(-1, -38 + bob, 2, 3);
+          ctx.fillRect(5, -38 + bob, 2, 3);
+          
+          // Mouth
+          ctx.fillStyle = '#451a03';
+          ctx.fillRect(1, -33 + bob, 4, 1);
+          
+          // Beard stubble
+          ctx.fillStyle = colorHairHighlight;
+          ctx.fillRect(0, -31 + bob, 1, 1);
+          ctx.fillRect(3, -31 + bob, 1, 1);
+          ctx.fillRect(5, -31 + bob, 1, 1);
+          ctx.fillRect(1, -30 + bob, 4, 1);
         }
 
-        // Hair & Headband
-        drawRect(colorHair, -8, -46 + bob, 16, 4);
-        drawRect(colorHair, -9, -44 + bob, 2, 6); // left spike
-        drawRect(colorHair, 7, -44 + bob, 2, 6); // right spike
-        
-        drawRect(colorHeadband, -8, -40 + bob, 16, 3);
-        drawRect(colorHeadband, -11, -40 + bob, 3, 8); // headband ribbon tail
+        // Simple smooth hair
+        drawRect(colorHair, -8, -46 + bob, 16, 6);
 
         // 4. Arms & Fists
         if (this.attackActiveTimer > 0) {
@@ -658,7 +661,7 @@ export class Player {
           else if (this.comboStep === 3) xOffset = -3; // lean back kick 3
         }
  
-        // Draw Hawaiian shirt body
+        // Draw simple t-shirt body
         drawRect(colorShirt, -11 + xOffset, -48 + currentBob, 22, 28);
         drawRect(colorShirtShade, -11 + xOffset, -48 + currentBob, 4, 28); // Shadow on back
         
@@ -666,47 +669,38 @@ export class Player {
         drawRect(colorShirtShade, -7 + xOffset, -38 + currentBob, 14, 2);
         drawRect(colorShirtShade, -3 + xOffset, -32 + currentBob, 10, 2);
  
-        // Hawaiian flowers pattern
-        if (!isOutline) {
-          drawRect(colorShirtFlowers, -7 + xOffset, -44 + currentBob, 4, 4);
-          drawRect(colorShirtFlowers, 3 + xOffset, -40 + currentBob, 4, 4);
-          drawRect(colorShirtFlowers, -3 + xOffset, -32 + currentBob, 4, 4);
-          drawRect(colorShirtFlowers, 5 + xOffset, -28 + currentBob, 4, 4);
-        }
-
-        // V-Neck chest skin opening
-        drawRect(colorSkin, -3 + xOffset, -48 + currentBob, 6, 8);
- 
-        // Brown belt wrapping waist
+        // Belt wrapping waist
         drawRect(colorBelt, -12 + xOffset, -24 + currentBob, 24, 5);
-        drawRect(colorBeltHighlight, -3 + xOffset, -24 + currentBob, 6, 5);
  
         // 3. Head
         drawRect(colorSkin, -7 + xOffset, -62 + currentBob, 14, 14);
  
         if (!isOutline) {
-          // Sunglasses
-          drawRect(colorSunglasses, 1 + xOffset, -57 + currentBob, 8, 4);
-          drawRect('#ffffff', 5 + xOffset, -57 + currentBob, 4, 4); // glare
+          // Eyebrows
+          ctx.fillStyle = colorHair;
+          ctx.fillRect(-1 + xOffset, -59 + currentBob, 4, 1);
+          ctx.fillRect(5 + xOffset, -59 + currentBob, 4, 1);
+
+          // Eyes
+          ctx.fillStyle = '#111111';
+          ctx.fillRect(0 + xOffset, -57 + currentBob, 2, 3);
+          ctx.fillRect(6 + xOffset, -57 + currentBob, 2, 3);
+          
+          // Mouth
+          ctx.fillStyle = '#451a03';
+          ctx.fillRect(2 + xOffset, -52 + currentBob, 4, 1);
+          
+          // Beard stubble
+          ctx.fillStyle = colorHairHighlight;
+          ctx.fillRect(1 + xOffset, -50 + currentBob, 1, 1);
+          ctx.fillRect(4 + xOffset, -50 + currentBob, 1, 1);
+          ctx.fillRect(6 + xOffset, -50 + currentBob, 1, 1);
+          ctx.fillRect(2 + xOffset, -49 + currentBob, 4, 1);
         }
         
-        // Spiky Hair
-        drawRect(colorHair, -8 + xOffset, -66 + currentBob, 16, 4);
-        drawRect(colorHair, -9 + xOffset, -64 + currentBob, 2, 8); // left spikes
-        drawRect(colorHair, 7 + xOffset, -64 + currentBob, 2, 8); // right spikes
-        drawRect(colorHairHighlight, -4 + xOffset, -65 + currentBob, 8, 1); // highlights
- 
-        // Red Headband
-        drawRect(colorHeadband, -8 + xOffset, -60 + currentBob, 16, 3);
-        
-        // Ribbon tails flying back
-        if (this.isRunning) {
-          drawRect(colorHeadband, -14 + xOffset, -59 + currentBob, 6, 3);
-          drawRect(colorHeadbandShade, -18 + xOffset, -57 + currentBob, 5, 3);
-        } else {
-          drawRect(colorHeadband, -11 + xOffset, -59 + currentBob, 3, 10);
-          drawRect(colorHeadbandShade, -13 + xOffset, -56 + currentBob, 2, 7);
-        }
+        // Simple rounded hair
+        drawRect(colorHair, -8 + xOffset, -66 + currentBob, 16, 6);
+        drawRect(colorHairHighlight, -4 + xOffset, -65 + currentBob, 8, 2);
  
         // 4. Arms / Attacks
         if (this.attackActiveTimer > 0) {
@@ -773,26 +767,28 @@ export class Player {
     };
     const drawRect = (color: string, rx: number, ry: number, rw: number, rh: number) => {
       setColor(color);
-      const x = Math.floor(rx / gridSize) * gridSize;
-      const y = Math.floor(ry / gridSize) * gridSize;
-      const w = Math.ceil(rw / gridSize) * gridSize;
-      const h = Math.ceil(rh / gridSize) * gridSize;
-      ctx.fillRect(x, y, w, h);
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(rx, ry, rw, rh, Math.min(rw, rh) * 0.3); // Smooth rounded corners
+        ctx.fill();
+      } else {
+        ctx.fillRect(rx, ry, rw, rh);
+      }
     };
 
-    const colorShirt = isGoldActive ? '#fbbf24' : '#dc2626';
-    const colorShirtShade = isGoldActive ? '#b45309' : '#991b1b';
-    const colorShirtFlowers = isGoldActive ? '#ffd700' : '#fde047';
-    const colorShorts = isGoldActive ? '#fef08a' : '#d2b48c';
-    const colorShortsShade = isGoldActive ? '#ca8a04' : '#b59970';
-    const colorHair = isGoldActive ? '#fde047' : '#1a1a1a';
+    const colorShirt = isGoldActive ? '#fbbf24' : '#0ea5e9';
+    const colorShirtShade = isGoldActive ? '#b45309' : '#0284c7';
+    const colorShirtFlowers = 'rgba(0,0,0,0)';
+    const colorShorts = isGoldActive ? '#fef08a' : '#94a3b8';
+    const colorShortsShade = isGoldActive ? '#ca8a04' : '#64748b';
+    const colorHair = isGoldActive ? '#fde047' : '#334155';
     const colorSkin = isGoldActive ? '#fef08a' : '#df9a66';
     const colorSkinShade = isGoldActive ? '#ca8a04' : '#9a3412';
-    const colorBelt = isGoldActive ? '#b45309' : '#78350f';
-    const colorHeadband = isGoldActive ? '#fbbf24' : '#b91c1c';
-    const colorSandalSole = isGoldActive ? '#b45309' : '#78350f';
-    const colorSandalStrap = isGoldActive ? '#fef08a' : '#451a03';
-    const colorSunglasses = isGoldActive ? '#ffd700' : '#111111';
+    const colorBelt = isGoldActive ? '#b45309' : '#1e293b';
+    const colorHeadband = 'rgba(0,0,0,0)';
+    const colorSandalSole = isGoldActive ? '#b45309' : '#1e293b';
+    const colorSandalStrap = isGoldActive ? '#fef08a' : '#1e293b';
+    const colorSunglasses = 'rgba(0,0,0,0)';
 
     // Slide pose: slanted legs and torso sliding right
     // 1. Legs sliding (extended right, bent left)
@@ -878,22 +874,24 @@ export class Player {
     };
     const drawRect = (color: string, rx: number, ry: number, rw: number, rh: number) => {
       setColor(color);
-      const x = Math.floor(rx / gridSize) * gridSize;
-      const y = Math.floor(ry / gridSize) * gridSize;
-      const w = Math.ceil(rw / gridSize) * gridSize;
-      const h = Math.ceil(rh / gridSize) * gridSize;
-      ctx.fillRect(x, y, w, h);
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(rx, ry, rw, rh, Math.min(rw, rh) * 0.3); // Smooth rounded corners
+        ctx.fill();
+      } else {
+        ctx.fillRect(rx, ry, rw, rh);
+      }
     };
 
-    const colorShirt = '#dc2626';
-    const colorShirtShade = '#991b1b';
-    const colorShirtFlowers = '#fde047';
-    const colorShorts = '#d2b48c';
+    const colorShirt = '#0ea5e9';
+    const colorShirtShade = '#0284c7';
+    const colorShirtFlowers = 'rgba(0,0,0,0)';
+    const colorShorts = '#94a3b8';
     const colorSkin = '#df9a66';
-    const colorBelt = '#78350f';
-    const colorHair = '#0f172a';
-    const colorSandalSole = '#78350f';
-    const colorSunglasses = '#111111';
+    const colorBelt = '#1e293b';
+    const colorHair = '#334155';
+    const colorSandalSole = '#1e293b';
+    const colorSunglasses = 'rgba(0,0,0,0)';
 
     // Drawn rotated 90 degrees in drawDead
     drawRect(colorShirt, -12, -20, 24, 28); // Torso shirt
@@ -935,15 +933,21 @@ export class Player {
     ctx.save();
     ctx.translate(-cameraX, 0);
 
-    ctx.fillStyle = this.comboStep === 3 ? 'rgba(6, 182, 212, 0.8)' : 'rgba(255, 255, 255, 0.7)';
+    ctx.strokeStyle = this.comboStep === 3 ? 'rgba(6, 182, 212, 0.8)' : 'rgba(255, 255, 255, 0.7)';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
     const currentHeight = this.isCrouching ? this.height / 2 : this.height;
-    const ax = this.facingRight ? this.x + this.width + 5 : this.x - 20;
+    const ax = this.facingRight ? this.x + this.width + 5 : this.x - 5;
     const ay = this.y + currentHeight / 2 - 5;
 
-    // Draw a blocky 3-step slash arc
-    ctx.fillRect(ax, ay - 12, 6, 24);
-    ctx.fillRect(ax + (this.facingRight ? 6 : -6), ay - 6, 6, 18);
-    ctx.fillRect(ax + (this.facingRight ? 12 : -12), ay, 6, 12);
+    // Draw a smooth slash arc
+    ctx.beginPath();
+    if (this.facingRight) {
+      ctx.arc(ax, ay, 20, -Math.PI / 3, Math.PI / 3);
+    } else {
+      ctx.arc(ax, ay, 20, Math.PI - Math.PI / 3, Math.PI + Math.PI / 3);
+    }
+    ctx.stroke();
 
     ctx.restore();
   }

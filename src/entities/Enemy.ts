@@ -20,7 +20,7 @@ export class Enemy {
   stunTimer: number = 0;
   flashTimer: number = 0; // Turns white when > 0
   facingRight: boolean = false;
-  state: 'patrol' | 'chase' | 'crash_stun' | 'dead' = 'patrol';
+  state: 'patrol' | 'chase' | 'crash_stun' | 'dead' | 'swooping' = 'patrol';
 
   // Lawnmower crash tracking
   lawnmowerStunDuration: number = 180; // 3 seconds at 60fps
@@ -117,6 +117,13 @@ export class Enemy {
     return null;
   }
 
+  swoopUp() {
+    if (this.type === 'pigeon' && this.state !== 'swooping') {
+      this.state = 'swooping';
+      this.vy = -6;
+    }
+  }
+
   private spawnDrops(): Drop[] {
     const drops: Drop[] = [];
     const coinCount = this.type === 'officer_bob' ? 20 : (this.type === 'dog' ? 4 : (this.type === 'inspector' ? 6 : 2));
@@ -172,6 +179,17 @@ export class Enemy {
 
     // AI Logic by Type
     if (this.type === 'pigeon') {
+      if (this.state === 'swooping') {
+        this.vy += 0.2; // Gravity
+        this.y += this.vy;
+        this.x += this.vx;
+        if (this.y >= this.groundY - 35 && this.vy > 0) {
+          this.y = this.groundY - 35;
+          this.state = 'chase';
+        }
+        return;
+      }
+
       // Ground-charging Pigeon AI: hover 35px above current ground
       this.y = (this.groundY - 35) + Math.sin(tick * 0.15) * 4;
       this.vy = 0;
@@ -207,6 +225,34 @@ export class Enemy {
 
     } else if (this.type === 'dog') {
       // Dog AI: Patrols, chases if player is nearby, barks
+      this.vy += 0.5; // Gravity
+      this.y += this.vy;
+      
+      let isGrounded = false;
+      if (this.y >= this.groundY - this.height) {
+        this.y = this.groundY - this.height;
+        this.vy = 0;
+        isGrounded = true;
+      }
+
+      // Check for obstacles ahead
+      const lookAheadX = this.facingRight ? this.x + this.width + 10 : this.x - 10;
+      let obstacleAhead = false;
+      for (const p of platforms) {
+        if (p.type === 'obstacle' || (p.type === 'trashcan' && !p.broken)) {
+          if (lookAheadX > p.x && lookAheadX < p.x + p.w) {
+            if (p.y < this.y + this.height) {
+              obstacleAhead = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (obstacleAhead && isGrounded && Math.abs(this.vx) > 0) {
+        this.vy = -10; // Jump!
+      }
+
       if (this.state === 'patrol') {
         if (this.vx === 0) this.vx = this.speed;
         
